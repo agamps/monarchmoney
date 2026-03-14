@@ -18,6 +18,25 @@ async def session_is_valid(mm: MonarchMoney) -> bool:
         raise
 
 
+async def interactive_login_with_retry(max_attempts: int = 2) -> MonarchMoney:
+    last_error: Exception | None = None
+
+    for attempt in range(1, max_attempts + 1):
+        mm = MonarchMoney()
+        try:
+            await mm.interactive_login()
+            return mm
+        except Exception as e:
+            last_error = e
+            if "401" not in str(e) or attempt == max_attempts:
+                raise
+
+            print("Interactive login returned 401. Retrying with a fresh client...")
+
+    assert last_error is not None
+    raise last_error
+
+
 async def main():
     mm = MonarchMoney()
 
@@ -32,8 +51,9 @@ async def main():
         print("Saved session is invalid or expired. Refreshing login...")
         SESSION_FILE.unlink(missing_ok=True)
 
-    await mm.interactive_login()
-    mm.save_session()
+    mm = await interactive_login_with_retry()
+    SESSION_FILE.parent.mkdir(parents=True, exist_ok=True)
+    mm.save_session(str(SESSION_FILE))
     print("Fresh session saved.")
 
 
