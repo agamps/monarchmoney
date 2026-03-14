@@ -17,6 +17,7 @@ from monarchmoney import MonarchMoney
 SESSION_FILE = Path(".mm/mm_session.pickle")
 LOGIN_SCRIPT = Path("login.py")
 DEFAULT_DATA_DIR = Path(os.environ.get("MONARCH_DATA_DIR", "data"))
+DEFAULT_OUTPUT_BASENAME = "unreviewed_only_transactions"
 BATCH_SIZE = 400  # configurable
 
 
@@ -27,6 +28,11 @@ def parse_args() -> argparse.Namespace:
         type=Path,
         default=DEFAULT_DATA_DIR,
         help="Directory where unreviewed transaction files will be written.",
+    )
+    parser.add_argument(
+        "--filename",
+        default=DEFAULT_OUTPUT_BASENAME,
+        help="Base filename for the exported unreviewed transaction files, without extension.",
     )
     return parser.parse_args()
 
@@ -161,10 +167,11 @@ def write_csv(path: Path, rows: list[dict]) -> None:
 async def main():
     args = parse_args()
     data_dir = args.data_dir
+    output_basename = Path(args.filename).stem
     data_dir.mkdir(parents=True, exist_ok=True)
 
-    unreviewed_json = data_dir / "unreviewed_only_transactions.json"
-    unreviewed_csv = data_dir / "unreviewed_only_transactions.csv"
+    unreviewed_json = data_dir / f"{output_basename}.json"
+    unreviewed_csv = data_dir / f"{output_basename}.csv"
 
     mm = await get_mm()
 

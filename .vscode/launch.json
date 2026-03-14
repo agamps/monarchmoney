@@ -21,6 +21,18 @@
       "type": "promptString",
       "description": "Dry run mode (true or false)",
       "default": "TRUE"
+    },
+    {
+      "id": "unreviewedDataDir",
+      "type": "promptString",
+      "description": "Data directory for unreviewed transaction exports",
+      "default": "data"
+    },
+    {
+      "id": "unreviewedFilename",
+      "type": "promptString",
+      "description": "Base filename for unreviewed transaction exports",
+      "default": "unreviewed_only_transactions"
     }
   ],
   "configurations": [
@@ -70,6 +82,19 @@
       "program": "${workspaceFolder}/pull_transactions_persist_batches.py",
       "console": "integratedTerminal",
       "args": "${command:pickArgs}"
+    },
+    {
+      "name": "Python Debugger: Get unreviewed",
+      "type": "debugpy",
+      "request": "launch",
+      "program": "${workspaceFolder}/get_unreviewed.py",
+      "console": "integratedTerminal",
+      "args": [
+        "--data-dir",
+        "${input:unreviewedDataDir}",
+        "--filename",
+        "${input:unreviewedFilename}"
+      ]
     },
   ]
 }

@@ -7,6 +7,7 @@ import subprocess
 import sys
 from pathlib import Path
 
+from gql.transport.exceptions import TransportServerError
 from monarchmoney import MonarchMoney
 
 # ----------------------------
@@ -16,6 +17,8 @@ SESSION_FILE = Path(".mm/mm_session.pickle")
 LOGIN_SCRIPT = Path("login.py")
 DEFAULT_DATA_DIR = Path(os.environ.get("MONARCH_DATA_DIR", "data"))
 BATCH_SIZE = 100  # configurable
+MAX_BATCH_RETRIES = 3
+RETRY_DELAY_SECONDS = 2
 
 
 def parse_args() -> argparse.Namespace:
@@ -31,21 +34,45 @@ def parse_args() -> argparse.Namespace:
 
 async def get_mm() -> MonarchMoney:
     mm = MonarchMoney()
+    result = subprocess.run([sys.executable, str(LOGIN_SCRIPT)], check=False)
+    if result.returncode != 0:
+        raise RuntimeError(f"{LOGIN_SCRIPT} failed with exit code {result.returncode}")
 
     if not SESSION_FILE.exists():
-        print(f"Session file not found: {SESSION_FILE}")
-        print(f"Running {LOGIN_SCRIPT}...")
-        result = subprocess.run([sys.executable, str(LOGIN_SCRIPT)], check=False)
-        if result.returncode != 0:
-            raise RuntimeError(f"{LOGIN_SCRIPT} failed with exit code {result.returncode}")
-
-        if not SESSION_FILE.exists():
-            raise FileNotFoundError(
-                f"{LOGIN_SCRIPT} ran, but session file still does not exist: {SESSION_FILE}"
-            )
+        raise FileNotFoundError(
+            f"{LOGIN_SCRIPT} ran, but session file still does not exist: {SESSION_FILE}"
+        )
 
     mm.load_session(str(SESSION_FILE))
     return mm
+
+
+async def fetch_transactions_with_reauth(
+    mm: MonarchMoney, limit: int, offset: int
+) -> tuple[MonarchMoney, dict]:
+    for attempt in range(1, MAX_BATCH_RETRIES + 1):
+        try:
+            data = await mm.get_transactions(limit=limit, offset=offset)
+            return mm, data
+        except TransportServerError as e:
+            if "401" not in str(e):
+                raise
+
+            print("Session expired. Re-running login.py and retrying batch...")
+            mm = await get_mm()
+        except TimeoutError as e:
+            if attempt == MAX_BATCH_RETRIES:
+                raise RuntimeError(
+                    f"Timed out fetching batch at offset={offset} after {MAX_BATCH_RETRIES} attempts."
+                ) from e
+
+            print(
+                f"Timeout fetching batch at offset={offset} "
+                f"(attempt {attempt}/{MAX_BATCH_RETRIES}). Retrying in {RETRY_DELAY_SECONDS}s..."
+            )
+            await asyncio.sleep(RETRY_DELAY_SECONDS)
+
+    raise RuntimeError(f"Failed to fetch batch at offset={offset}.")
 
 
 def flatten_transaction(txn: dict) -> dict:
@@ -134,7 +161,7 @@ async def main():
         batch_num += 1
         print(f"Fetching batch {batch_num} with offset={offset}, limit={BATCH_SIZE}...")
 
-        data = await mm.get_transactions(limit=BATCH_SIZE, offset=offset)
+        mm, data = await fetch_transactions_with_reauth(mm, BATCH_SIZE, offset)
         transactions = data.get("allTransactions", {}).get("results", [])
 
         if not transactions:
