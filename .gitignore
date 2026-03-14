@@ -190,6 +190,7 @@ cython_debug/
 
 # Local Monarch state
 .mm/
+data/
 
 # Ruff stuff:
 .ruff_cache/

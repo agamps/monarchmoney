@@ -1,6 +1,7 @@
 import asyncio
 import csv
 import json
+import os
 from datetime import datetime
 from pathlib import Path
 from typing import Any
@@ -13,10 +14,11 @@ from monarchmoney import MonarchMoney
 # Config
 # ----------------------------
 SESSION_FILE = Path(".mm/mm_session.pickle")
+DATA_DIR = Path(os.environ.get("MONARCH_DATA_DIR", "data"))
 
 INPUT_FILE = Path("push.csv")
-CATEGORIES_FILE = Path("categories.json")
-TAGS_FILE = Path("tags.json")
+CATEGORIES_FILE = DATA_DIR / "categories.json"
+TAGS_FILE = DATA_DIR / "tags.json"
 
 DRY_RUN = True  # Set to False when ready to push for real
 
@@ -186,7 +188,7 @@ def build_update_payload(
         if category_name:
             category_id = category_map.get(category_name)
             if not category_id:
-                raise ValueError(f"Category not found in categories.json: {category_name!r}")
+                raise ValueError(f"Category not found in {CATEGORIES_FILE}: {category_name!r}")
             payload["category_id"] = category_id
         else:
             # Best-effort clear. Whether Monarch accepts None here depends on the API.
@@ -231,7 +233,7 @@ def build_update_payload(
         for tag_name in tag_names:
             tag_id = tag_map.get(tag_name)
             if not tag_id:
-                raise ValueError(f"Tag not found in tags.json: {tag_name!r}")
+                raise ValueError(f"Tag not found in {TAGS_FILE}: {tag_name!r}")
             tag_ids.append(tag_id)
 
     return payload, reviewed, tag_ids

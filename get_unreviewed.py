@@ -1,6 +1,8 @@
 import asyncio
+import argparse
 import csv
 import json
+import os
 import subprocess
 import sys
 from pathlib import Path
@@ -14,11 +16,19 @@ from monarchmoney import MonarchMoney
 # ----------------------------
 SESSION_FILE = Path(".mm/mm_session.pickle")
 LOGIN_SCRIPT = Path("login.py")
-SAVE_FOLDER = Path(".")
+DEFAULT_DATA_DIR = Path(os.environ.get("MONARCH_DATA_DIR", "data"))
 BATCH_SIZE = 400  # configurable
 
-UNREVIEWED_JSON = SAVE_FOLDER / "unreviewed_only_transactions.json"
-UNREVIEWED_CSV = SAVE_FOLDER / "unreviewed_only_transactions.csv"
+
+def parse_args() -> argparse.Namespace:
+    parser = argparse.ArgumentParser()
+    parser.add_argument(
+        "--data-dir",
+        type=Path,
+        default=DEFAULT_DATA_DIR,
+        help="Directory where unreviewed transaction files will be written.",
+    )
+    return parser.parse_args()
 
 
 async def get_mm() -> MonarchMoney:
@@ -149,7 +159,13 @@ def write_csv(path: Path, rows: list[dict]) -> None:
 
 
 async def main():
-    SAVE_FOLDER.mkdir(parents=True, exist_ok=True)
+    args = parse_args()
+    data_dir = args.data_dir
+    data_dir.mkdir(parents=True, exist_ok=True)
+
+    unreviewed_json = data_dir / "unreviewed_only_transactions.json"
+    unreviewed_csv = data_dir / "unreviewed_only_transactions.csv"
+
     mm = await get_mm()
 
     unreviewed_transactions: list[dict] = []
@@ -168,8 +184,8 @@ async def main():
 
         unreviewed_transactions.extend(transactions)
 
-        write_json(UNREVIEWED_JSON, unreviewed_transactions)
-        write_csv(UNREVIEWED_CSV, unreviewed_transactions)
+        write_json(unreviewed_json, unreviewed_transactions)
+        write_csv(unreviewed_csv, unreviewed_transactions)
 
         print(f"Saved after batch {batch_num}: {len(unreviewed_transactions)} unreviewed")
 
@@ -180,8 +196,8 @@ async def main():
         offset += BATCH_SIZE
 
     print("Done.")
-    print(f"Unreviewed JSON: {UNREVIEWED_JSON.resolve()}")
-    print(f"Unreviewed CSV:  {UNREVIEWED_CSV.resolve()}")
+    print(f"Unreviewed JSON: {unreviewed_json.resolve()}")
+    print(f"Unreviewed CSV:  {unreviewed_csv.resolve()}")
 
 
 if __name__ == "__main__":
