@@ -1,4 +1,5 @@
 import asyncio
+import argparse
 import csv
 import json
 import os
@@ -14,13 +15,37 @@ from monarchmoney import MonarchMoney
 # Config
 # ----------------------------
 SESSION_FILE = Path(".mm/mm_session.pickle")
-DATA_DIR = Path(os.environ.get("MONARCH_DATA_DIR", "data"))
+DEFAULT_DATA_DIR = Path(os.environ.get("MONARCH_DATA_DIR", "data"))
+DEFAULT_INPUT_FILE = Path(os.environ.get("MONARCH_PUSH_FILE", "push.csv"))
+DEFAULT_DRY_RUN = os.environ.get("MONARCH_DRY_RUN", "true").strip().lower() in {
+    "true",
+    "1",
+    "yes",
+    "y",
+}
 
-INPUT_FILE = Path("push.csv")
-CATEGORIES_FILE = DATA_DIR / "categories.json"
-TAGS_FILE = DATA_DIR / "tags.json"
 
-DRY_RUN = True  # Set to False when ready to push for real
+def parse_args() -> argparse.Namespace:
+    parser = argparse.ArgumentParser()
+    parser.add_argument(
+        "--data-dir",
+        type=Path,
+        default=DEFAULT_DATA_DIR,
+        help="Directory containing categories.json and tags.json.",
+    )
+    parser.add_argument(
+        "--input-file",
+        type=Path,
+        default=DEFAULT_INPUT_FILE,
+        help="CSV or JSON file containing transaction updates to push.",
+    )
+    parser.add_argument(
+        "--dry-run",
+        type=normalize_bool,
+        default=DEFAULT_DRY_RUN,
+        help="Whether to simulate updates without pushing them.",
+    )
+    return parser.parse_args()
 
 
 def clean_str(value: Any) -> str | None:
@@ -103,6 +128,18 @@ def load_rows(path: Path) -> list[dict]:
     raise ValueError("INPUT_FILE must be a .csv or .json file")
 
 
+def resolve_input_file(input_file: Path, data_dir: Path) -> Path:
+    if input_file.is_absolute():
+        return input_file
+
+    if len(input_file.parts) == 1:
+        data_dir_candidate = data_dir / input_file
+        if data_dir_candidate.exists():
+            return data_dir_candidate
+
+    return input_file
+
+
 async def get_mm() -> MonarchMoney:
     mm = MonarchMoney()
 
@@ -173,6 +210,8 @@ def build_update_payload(
     row: dict,
     category_map: dict[str, str],
     tag_map: dict[str, str],
+    categories_file: Path,
+    tags_file: Path,
 ) -> tuple[dict, bool | None, list[str] | None]:
     transaction_id = clean_str(row.get("Transaction ID") or row.get("id"))
     if not transaction_id:
@@ -188,7 +227,7 @@ def build_update_payload(
         if category_name:
             category_id = category_map.get(category_name)
             if not category_id:
-                raise ValueError(f"Category not found in {CATEGORIES_FILE}: {category_name!r}")
+                raise ValueError(f"Category not found in {categories_file}: {category_name!r}")
             payload["category_id"] = category_id
         else:
             # Best-effort clear. Whether Monarch accepts None here depends on the API.
@@ -233,20 +272,28 @@ def build_update_payload(
         for tag_name in tag_names:
             tag_id = tag_map.get(tag_name)
             if not tag_id:
-                raise ValueError(f"Tag not found in {TAGS_FILE}: {tag_name!r}")
+                raise ValueError(f"Tag not found in {tags_file}: {tag_name!r}")
             tag_ids.append(tag_id)
 
     return payload, reviewed, tag_ids
 
 
 async def main():
-    rows = load_rows(INPUT_FILE)
-    category_map = load_name_id_map(CATEGORIES_FILE, "Categories")
-    tag_map = load_name_id_map(TAGS_FILE, "Tags")
+    args = parse_args()
+    data_dir = args.data_dir
+    input_file = resolve_input_file(args.input_file, data_dir)
+    dry_run = bool(args.dry_run)
 
-    print(f"Loaded {len(rows)} rows from {INPUT_FILE}")
-    print(f"Loaded {len(category_map)} categories from {CATEGORIES_FILE}")
-    print(f"Loaded {len(tag_map)} tags from {TAGS_FILE}")
+    categories_file = data_dir / "categories.json"
+    tags_file = data_dir / "tags.json"
+
+    rows = load_rows(input_file)
+    category_map = load_name_id_map(categories_file, "Categories")
+    tag_map = load_name_id_map(tags_file, "Tags")
+
+    print(f"Loaded {len(rows)} rows from {input_file}")
+    print(f"Loaded {len(category_map)} categories from {categories_file}")
+    print(f"Loaded {len(tag_map)} tags from {tags_file}")
 
     mm = await get_mm()
 
@@ -256,7 +303,13 @@ async def main():
 
     for i, row in enumerate(rows, start=1):
         try:
-            payload, reviewed, tag_ids = build_update_payload(row, category_map, tag_map)
+            payload, reviewed, tag_ids = build_update_payload(
+                row,
+                category_map,
+                tag_map,
+                categories_file,
+                tags_file,
+            )
         except Exception as e:
             skipped += 1
             print(f"[{i}] Skipping row: {e}")
@@ -269,7 +322,7 @@ async def main():
         if tag_ids is not None:
             print(f"    Tag IDs: {tag_ids}")
 
-        if DRY_RUN:
+        if dry_run:
             updated += 1
             continue
 
@@ -300,10 +353,10 @@ async def main():
             failed += 1
             print(f"[{i}] Unexpected failure for {payload['transaction_id']}: {e}")
 
-    mode = "DRY RUN" if DRY_RUN else "PUSHED"
+    mode = "DRY RUN" if dry_run else "PUSHED"
     print(f"\nDone. {mode}: {updated}, Skipped: {skipped}, Failed: {failed}")
 
-    if DRY_RUN and updated > 0:
+    if dry_run and updated > 0:
         print("Set DRY_RUN = False and run again to push for real.")
 
 
