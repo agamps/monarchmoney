@@ -3,11 +3,14 @@ import argparse
 import csv
 import json
 import os
+import subprocess
+import sys
 from datetime import datetime
 from pathlib import Path
 from typing import Any
 
 from gql import gql
+from gql.transport.exceptions import TransportServerError
 from gql.transport.exceptions import TransportQueryError
 from monarchmoney import MonarchMoney
 
@@ -15,6 +18,7 @@ from monarchmoney import MonarchMoney
 # Config
 # ----------------------------
 SESSION_FILE = Path(".mm/mm_session.pickle")
+LOGIN_SCRIPT = Path("login.py")
 DEFAULT_DATA_DIR = Path(os.environ.get("MONARCH_DATA_DIR", "data"))
 DEFAULT_INPUT_FILE = Path(os.environ.get("MONARCH_PUSH_FILE", "push.csv"))
 DEFAULT_DRY_RUN = os.environ.get("MONARCH_DRY_RUN", "true").strip().lower() in {
@@ -141,17 +145,48 @@ def resolve_input_file(input_file: Path, data_dir: Path) -> Path:
 
 
 async def get_mm() -> MonarchMoney:
-    mm = MonarchMoney()
-
     if not SESSION_FILE.exists():
-        raise RuntimeError(
-            f"Session file not found: {SESSION_FILE}\n"
-            f"Run: py .\\login.py"
-        )
+        print(f"Session file not found: {SESSION_FILE}")
+        print(f"Running {LOGIN_SCRIPT}...")
+        result = subprocess.run([sys.executable, str(LOGIN_SCRIPT)], check=False)
+        if result.returncode != 0:
+            raise RuntimeError(
+                f"Unable to create a Monarch session. {LOGIN_SCRIPT} exited with code {result.returncode}."
+            )
 
+        if not SESSION_FILE.exists():
+            raise RuntimeError(
+                f"{LOGIN_SCRIPT} completed but did not create {SESSION_FILE}."
+            )
+
+    mm = MonarchMoney()
     mm.load_session(str(SESSION_FILE))
-    await mm.get_accounts()  # validate session
-    return mm
+
+    try:
+        await mm.get_accounts()  # validate session
+        return mm
+    except TransportServerError as e:
+        if "401" not in str(e):
+            raise
+
+        print("Saved session expired. Re-running login.py...")
+        result = subprocess.run([sys.executable, str(LOGIN_SCRIPT)], check=False)
+        if result.returncode != 0:
+            raise RuntimeError(
+                "Monarch session expired and automatic re-login failed. "
+                f"Please run `py .\\{LOGIN_SCRIPT}` and try again."
+            ) from e
+
+        if not SESSION_FILE.exists():
+            raise RuntimeError(
+                "Monarch re-login completed but no session file was saved. "
+                f"Expected: {SESSION_FILE}"
+            ) from e
+
+        mm = MonarchMoney()
+        mm.load_session(str(SESSION_FILE))
+        await mm.get_accounts()
+        return mm
 
 
 async def set_reviewed(mm: MonarchMoney, transaction_id: str, reviewed: bool = True):
