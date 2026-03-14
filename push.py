@@ -1,27 +1,24 @@
 import asyncio
 import csv
 import json
-import subprocess
-import sys
 from datetime import datetime
 from pathlib import Path
 from typing import Any
 
 from gql import gql
-from gql.transport.exceptions import TransportServerError, TransportQueryError
+from gql.transport.exceptions import TransportQueryError
 from monarchmoney import MonarchMoney
 
 # ----------------------------
 # Config
 # ----------------------------
 SESSION_FILE = Path(".mm/mm_session.pickle")
-LOGIN_SCRIPT = Path("login.py")
 
 INPUT_FILE = Path("push.csv")
 CATEGORIES_FILE = Path("categories.json")
 TAGS_FILE = Path("tags.json")
 
-DRY_RUN = False  # Set to False when ready to push for real
+DRY_RUN = True  # Set to False when ready to push for real
 
 
 def clean_str(value: Any) -> str | None:
@@ -106,10 +103,15 @@ def load_rows(path: Path) -> list[dict]:
 
 async def get_mm() -> MonarchMoney:
     mm = MonarchMoney()
-    result = subprocess.run([sys.executable, str(LOGIN_SCRIPT)], check=False)
-    if result.returncode != 0:
-        raise RuntimeError(f"{LOGIN_SCRIPT} failed with exit code {result.returncode}")
+
+    if not SESSION_FILE.exists():
+        raise RuntimeError(
+            f"Session file not found: {SESSION_FILE}\n"
+            f"Run: py .\\login.py"
+        )
+
     mm.load_session(str(SESSION_FILE))
+    await mm.get_accounts()  # validate session
     return mm
 
 
@@ -146,50 +148,23 @@ async def set_reviewed(mm: MonarchMoney, transaction_id: str, reviewed: bool = T
     )
 
 
-async def update_transaction_with_reauth(mm: MonarchMoney, **kwargs) -> MonarchMoney:
-    try:
-        await mm.update_transaction(**kwargs)
-        return mm
-    except TransportServerError as e:
-        if "401" not in str(e):
-            raise
-
-        print("Session expired. Re-running login.py and retrying update...")
-        mm = await get_mm()
-        await mm.update_transaction(**kwargs)
-        return mm
+async def update_transaction_safe(mm: MonarchMoney, **kwargs) -> MonarchMoney:
+    await mm.update_transaction(**kwargs)
+    return mm
 
 
-async def set_reviewed_with_reauth(
+async def set_reviewed_safe(
     mm: MonarchMoney, transaction_id: str, reviewed: bool
 ) -> MonarchMoney:
-    try:
-        await set_reviewed(mm, transaction_id, reviewed=reviewed)
-        return mm
-    except TransportServerError as e:
-        if "401" not in str(e):
-            raise
-
-        print("Session expired. Re-running login.py and retrying review update...")
-        mm = await get_mm()
-        await set_reviewed(mm, transaction_id, reviewed=reviewed)
-        return mm
+    await set_reviewed(mm, transaction_id, reviewed=reviewed)
+    return mm
 
 
-async def set_transaction_tags_with_reauth(
+async def set_transaction_tags_safe(
     mm: MonarchMoney, transaction_id: str, tag_ids: list[str]
 ) -> MonarchMoney:
-    try:
-        await mm.set_transaction_tags(transaction_id=transaction_id, tag_ids=tag_ids)
-        return mm
-    except TransportServerError as e:
-        if "401" not in str(e):
-            raise
-
-        print("Session expired. Re-running login.py and retrying tag update...")
-        mm = await get_mm()
-        await mm.set_transaction_tags(transaction_id=transaction_id, tag_ids=tag_ids)
-        return mm
+    await mm.set_transaction_tags(transaction_id=transaction_id, tag_ids=tag_ids)
+    return mm
 
 
 def build_update_payload(
@@ -205,48 +180,59 @@ def build_update_payload(
         "transaction_id": transaction_id,
     }
 
-    category_name = clean_str(row.get("Category"))
-    if category_name:
-        category_id = category_map.get(category_name)
-        if not category_id:
-            raise ValueError(f"Category not found in categories.json: {category_name!r}")
-        payload["category_id"] = category_id
+    category_name_raw = row.get("Category")
+    if "Category" in row:
+        category_name = clean_str(category_name_raw)
+        if category_name:
+            category_id = category_map.get(category_name)
+            if not category_id:
+                raise ValueError(f"Category not found in categories.json: {category_name!r}")
+            payload["category_id"] = category_id
+        else:
+            # Best-effort clear. Whether Monarch accepts None here depends on the API.
+            payload["category_id"] = None
 
-    merchant_name = clean_str(row.get("Merchant"))
-    if merchant_name:
+    merchant_raw = row.get("Merchant")
+    if "Merchant" in row:
+        merchant_name = clean_str(merchant_raw)
         payload["merchant_name"] = merchant_name
 
-    amount = clean_str(row.get("Amount"))
-    if amount:
-        payload["amount"] = float(amount.replace(",", ""))
+    amount_raw = row.get("Amount")
+    if "Amount" in row:
+        amount = clean_str(amount_raw)
+        payload["amount"] = None if amount is None else float(amount.replace(",", ""))
 
-    date = normalize_date(row.get("Date"))
-    if date:
-        payload["date"] = date
+    date_raw = row.get("Date")
+    if "Date" in row:
+        payload["date"] = normalize_date(date_raw)
 
     hide_from_reports = normalize_bool(row.get("Hide From Reports"))
     if hide_from_reports is not None:
         payload["hide_from_reports"] = hide_from_reports
 
+    # Notes are the one exception: blank means "leave unchanged"
     notes = clean_str(row.get("Notes"))
     if notes:
         payload["notes"] = notes
 
     needs_review = normalize_bool(row.get("Needs Review"))
-    reviewed = None if needs_review is None else (not needs_review)
+    if needs_review is not None:
+        payload["needs_review"] = needs_review
+        reviewed = not needs_review
+    else:
+        reviewed = None
 
-    tags_value_present = "Tags" in row
+    # IMPORTANT:
+    # If Tags column exists and is blank, send [] to clear tags in Monarch.
     tag_ids: list[str] | None = None
-
-    if tags_value_present:
+    if "Tags" in row:
+        tag_ids = []
         tag_names = split_tag_names(row.get("Tags"))
-        if tag_names:
-            tag_ids = []
-            for tag_name in tag_names:
-                tag_id = tag_map.get(tag_name)
-                if not tag_id:
-                    raise ValueError(f"Tag not found in tags.json: {tag_name!r}")
-                tag_ids.append(tag_id)
+        for tag_name in tag_names:
+            tag_id = tag_map.get(tag_name)
+            if not tag_id:
+                raise ValueError(f"Tag not found in tags.json: {tag_name!r}")
+            tag_ids.append(tag_id)
 
     return payload, reviewed, tag_ids
 
@@ -286,17 +272,17 @@ async def main():
             continue
 
         try:
-            mm = await update_transaction_with_reauth(mm, **payload)
+            mm = await update_transaction_safe(mm, **payload)
 
             if reviewed is not None:
-                mm = await set_reviewed_with_reauth(
+                mm = await set_reviewed_safe(
                     mm,
                     transaction_id=payload["transaction_id"],
                     reviewed=reviewed,
                 )
 
             if tag_ids is not None:
-                mm = await set_transaction_tags_with_reauth(
+                mm = await set_transaction_tags_safe(
                     mm,
                     transaction_id=payload["transaction_id"],
                     tag_ids=tag_ids,
