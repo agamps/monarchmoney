@@ -27,6 +27,7 @@ DEFAULT_DRY_RUN = os.environ.get("MONARCH_DRY_RUN", "true").strip().lower() in {
     "yes",
     "y",
 }
+CSV_ENCODINGS = ("utf-8-sig", "cp1252", "latin-1")
 
 
 def parse_args() -> argparse.Namespace:
@@ -119,8 +120,18 @@ def load_rows(path: Path) -> list[dict]:
         raise FileNotFoundError(f"Input file not found: {path}")
 
     if path.suffix.lower() == ".csv":
-        with open(path, "r", encoding="utf-8-sig", newline="") as f:
-            return list(csv.DictReader(f))
+        last_error: UnicodeDecodeError | None = None
+        for encoding in CSV_ENCODINGS:
+            try:
+                with open(path, "r", encoding=encoding, newline="") as f:
+                    return list(csv.DictReader(f))
+            except UnicodeDecodeError as e:
+                last_error = e
+
+        assert last_error is not None
+        raise ValueError(
+            f"Could not decode CSV file {path} using supported encodings: {', '.join(CSV_ENCODINGS)}"
+        ) from last_error
 
     if path.suffix.lower() == ".json":
         with open(path, "r", encoding="utf-8") as f:
