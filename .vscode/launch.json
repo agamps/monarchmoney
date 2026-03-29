@@ -30,6 +30,12 @@
       "type": "promptString",
       "description": "Base filename for unreviewed transaction exports",
       "default": "unreviewed_only_transactions"
+    },
+    {
+      "id": "categoryGroupsOutput",
+      "type": "promptString",
+      "description": "Output CSV path for category group export",
+      "default": "data/category_groups.csv"
     }
   ],
   "configurations": [
@@ -79,6 +85,17 @@
       "program": "${workspaceFolder}/pull_transactions_persist_batches.py",
       "console": "integratedTerminal",
       "args": "${command:pickArgs}"
+    },
+    {
+      "name": "Python Debugger: Pull category groups",
+      "type": "debugpy",
+      "request": "launch",
+      "program": "${workspaceFolder}/pull_category_groups.py",
+      "console": "integratedTerminal",
+      "args": [
+        "--output",
+        "${input:categoryGroupsOutput}"
+      ]
     },
     {
       "name": "Python Debugger: Get unreviewed",
@@ -142,6 +159,20 @@
         "--update-local",     "true",
         "--all-transactions", "data/all_transactions.csv",
         "--unreviewed-file",  "data/unreviewed_transactions.csv"
+      ]
+    },
+
+    // -------------------------------------------------------
+    // PULL CATEGORY GROUPS: export to data folder
+    // -------------------------------------------------------
+    {
+      "name": "Pull Category Groups",
+      "type": "debugpy",
+      "request": "launch",
+      "program": "${workspaceFolder}/pull_category_groups.py",
+      "console": "integratedTerminal",
+      "args": [
+        "--output", "data/category_groups.csv"
       ]
     }
   ]
