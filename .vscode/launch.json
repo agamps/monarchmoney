@@ -1,7 +1,4 @@
 {
-  // Use IntelliSense to learn about possible attributes.
-  // Hover to view descriptions of existing attributes.
-  // For more information, visit: https://go.microsoft.com/fwlink/?linkid=830387
   "version": "0.2.0",
   "inputs": [
     {
@@ -96,5 +93,56 @@
         "${input:unreviewedFilename}"
       ]
     },
+
+    // -------------------------------------------------------
+    // PUSH: dry run, no local file update
+    // -------------------------------------------------------
+    {
+      "name": "Push — DRY RUN",
+      "type": "debugpy",
+      "request": "launch",
+      "program": "${workspaceFolder}/push.py",
+      "console": "integratedTerminal",
+      "args": [
+        "--data-dir",   "data",
+        "--input-file", "data/push.csv",
+        "--dry-run",    "true"
+      ]
+    },
+
+    // -------------------------------------------------------
+    // PUSH: LIVE, no local file update
+    // -------------------------------------------------------
+    {
+      "name": "Push — 🚨 LIVE",
+      "type": "debugpy",
+      "request": "launch",
+      "program": "${workspaceFolder}/push.py",
+      "console": "integratedTerminal",
+      "args": [
+        "--data-dir",   "data",
+        "--input-file", "data/push.csv",
+        "--dry-run",    "false"
+      ]
+    },
+
+    // -------------------------------------------------------
+    // PUSH + UPDATE LOCAL: LIVE, patches local CSVs after push
+    // -------------------------------------------------------
+    {
+      "name": "Push — 🚨 LIVE + Update Local",
+      "type": "debugpy",
+      "request": "launch",
+      "program": "${workspaceFolder}/push.py",
+      "console": "integratedTerminal",
+      "args": [
+        "--data-dir",         "data",
+        "--input-file",       "data/push.csv",
+        "--dry-run",          "false",
+        "--update-local",     "true",
+        "--all-transactions", "data/all_transactions.csv",
+        "--unreviewed-file",  "data/unreviewed_transactions.csv"
+      ]
+    }
   ]
 }

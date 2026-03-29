@@ -3,12 +3,15 @@ import argparse
 import csv
 import json
 import os
+import shutil
 import subprocess
 import sys
+import tempfile
 from datetime import datetime
 from pathlib import Path
 from typing import Any
 
+import pandas as pd
 from gql import gql
 from gql.transport.exceptions import TransportServerError
 from gql.transport.exceptions import TransportQueryError
@@ -49,6 +52,34 @@ def parse_args() -> argparse.Namespace:
         type=normalize_bool,
         default=DEFAULT_DRY_RUN,
         help="Whether to simulate updates without pushing them.",
+    )
+    parser.add_argument(
+        "--update-local",
+        type=normalize_bool,
+        default=False,
+        help=(
+            "After a live push, patch local CSV files to reflect changes. "
+            "Updates all_transactions.csv and removes reviewed rows from the "
+            "unreviewed transactions file. Ignored in dry-run mode."
+        ),
+    )
+    parser.add_argument(
+        "--all-transactions",
+        type=Path,
+        default=None,
+        help=(
+            "Path to all_transactions.csv to patch when --update-local is set. "
+            "Defaults to <data-dir>/all_transactions.csv."
+        ),
+    )
+    parser.add_argument(
+        "--unreviewed-file",
+        type=Path,
+        default=None,
+        help=(
+            "Path to the unreviewed transactions CSV to patch when --update-local is set. "
+            "Defaults to the resolved --input-file path."
+        ),
     )
     return parser.parse_args()
 
@@ -276,7 +307,6 @@ def build_update_payload(
                 raise ValueError(f"Category not found in {categories_file}: {category_name!r}")
             payload["category_id"] = category_id
         else:
-            # Best-effort clear. Whether Monarch accepts None here depends on the API.
             payload["category_id"] = None
 
     merchant_raw = row.get("Merchant")
@@ -297,7 +327,6 @@ def build_update_payload(
     if hide_from_reports is not None:
         payload["hide_from_reports"] = hide_from_reports
 
-    # Notes are the one exception: blank means "leave unchanged"
     notes = clean_str(row.get("Notes"))
     if notes:
         payload["notes"] = notes
@@ -309,8 +338,6 @@ def build_update_payload(
     else:
         reviewed = None
 
-    # IMPORTANT:
-    # If Tags column exists and is blank, send [] to clear tags in Monarch.
     tag_ids: list[str] | None = None
     if "Tags" in row:
         tag_ids = []
@@ -324,11 +351,145 @@ def build_update_payload(
     return payload, reviewed, tag_ids
 
 
+# ── Local file patching ──────────────────────────────────────────────────────
+
+UPDATABLE_COLS = [
+    "Merchant", "Category", "Notes", "Hide From Reports", "Needs Review", "Tags",
+]
+
+
+def atomic_write_csv(df: pd.DataFrame, path: Path) -> None:
+    """Write DataFrame to CSV atomically via a temp file."""
+    tmp = Path(tempfile.mktemp(dir=path.parent, suffix=".tmp"))
+    try:
+        df.to_csv(tmp, index=False, encoding="utf-8-sig")
+        shutil.move(str(tmp), str(path))
+    except Exception:
+        tmp.unlink(missing_ok=True)
+        raise
+
+
+def load_csv_df(path: Path) -> pd.DataFrame:
+    for enc in CSV_ENCODINGS:
+        try:
+            return pd.read_csv(path, dtype=str, encoding=enc)
+        except UnicodeDecodeError:
+            continue
+    raise ValueError(f"Could not decode {path}")
+
+
+def update_local_files(
+    pushed_rows: list[dict],
+    category_map: dict[str, str],
+    all_transactions_path: Path,
+    unreviewed_path: Path,
+) -> None:
+    # Build a lookup: transaction_id → row dict for all successfully pushed rows
+    pushed_by_id = {
+        str(clean_str(r.get("Transaction ID") or r.get("id"))): r
+        for r in pushed_rows
+    }
+
+    # Reverse category map: id → name (for writing back readable names)
+    cat_id_to_name = {v: k for k, v in category_map.items()}
+
+    def apply_row_updates(df: pd.DataFrame) -> pd.DataFrame:
+        id_col = next((c for c in df.columns if c.strip().lower() in ("transaction id", "id")), None)
+        if id_col is None:
+            return df
+        for idx, df_row in df.iterrows():
+            txn_id = str(df_row[id_col]).strip()
+            pushed = pushed_by_id.get(txn_id)
+            if pushed is None:
+                continue
+            for col in UPDATABLE_COLS:
+                if col in pushed and col in df.columns:
+                    df.at[idx, col] = pushed[col] if pushed[col] is not None else ""
+        return df
+
+    # ── Patch all_transactions.csv ───────────────────────────────────────────
+    if all_transactions_path.exists():
+        df = load_csv_df(all_transactions_path)
+        df = apply_row_updates(df)
+        atomic_write_csv(df, all_transactions_path)
+        print(f"  📝 {all_transactions_path.name} — {len(pushed_by_id)} row(s) updated")
+    else:
+        print(f"  ⚠️  {all_transactions_path} not found — skipped")
+
+    # ── Patch unreviewed_transactions CSV ────────────────────────────────────
+    if unreviewed_path.exists():
+        df = load_csv_df(unreviewed_path)
+        df = apply_row_updates(df)
+
+        # Find the Needs Review column (handle either naming convention)
+        nr_col = next(
+            (c for c in df.columns if c.strip().lower() in ("needs review", "needs_review")),
+            None,
+        )
+
+        def is_unreviewed(val: str) -> bool:
+            return str(val).strip().lower() not in ("false", "0", "no")
+
+        before = len(df)
+        if nr_col:
+            df = df[df[nr_col].apply(is_unreviewed)]
+        dropped = before - len(df)
+
+        # Add back any rows flipped back to Needs Review = True.
+        # Source the full row from all_transactions.csv so we have all columns.
+        added = 0
+        if all_transactions_path.exists() and nr_col:
+            unrev_id_col = next(
+                (c for c in df.columns if c.strip().lower() in ("transaction id", "id")),
+                None,
+            )
+            ids_already_in_unreviewed = (
+                set(df[unrev_id_col].astype(str).str.strip())
+                if unrev_id_col else set()
+            )
+            all_df = load_csv_df(all_transactions_path)
+            all_id_col = next(
+                (c for c in all_df.columns if c.strip().lower() in ("transaction id", "id")),
+                None,
+            )
+            for txn_id, pushed in pushed_by_id.items():
+                nr_val = pushed.get("Needs Review") or pushed.get("needs_review") or ""
+                if not is_unreviewed(nr_val):
+                    continue  # marked reviewed — handled by drop above
+                if txn_id in ids_already_in_unreviewed:
+                    continue  # already in the unreviewed file
+                if all_id_col is None:
+                    continue
+                match = all_df[all_df[all_id_col].astype(str).str.strip() == txn_id]
+                if match.empty:
+                    continue
+                new_row = match.iloc[[0]].reindex(columns=df.columns, fill_value="")
+                df = pd.concat([df, new_row], ignore_index=True)
+                added += 1
+
+        atomic_write_csv(df, unreviewed_path)
+        print(
+            f"  📝 {unreviewed_path.name} — "
+            f"{dropped} row(s) removed (reviewed), "
+            f"{added} row(s) added back (unreviewed), "
+            f"{len(df)} remaining"
+        )
+    else:
+        print(f"  ⚠️  {unreviewed_path} not found — skipped")
+
+
+# ── Main ─────────────────────────────────────────────────────────────────────
+
 async def main():
     args = parse_args()
     data_dir = args.data_dir
     input_file = resolve_input_file(args.input_file, data_dir)
     dry_run = bool(args.dry_run)
+    update_local = bool(args.update_local)
+
+    # Resolve local file paths for --update-local
+    all_transactions_path = args.all_transactions or (data_dir / "all_transactions.csv")
+    unreviewed_path = args.unreviewed_file or input_file
 
     categories_file = data_dir / "categories.json"
     tags_file = data_dir / "tags.json"
@@ -340,12 +501,16 @@ async def main():
     print(f"Loaded {len(rows)} rows from {input_file}")
     print(f"Loaded {len(category_map)} categories from {categories_file}")
     print(f"Loaded {len(tag_map)} tags from {tags_file}")
+    if not dry_run and update_local:
+        print(f"Will update : {all_transactions_path}")
+        print(f"             {unreviewed_path}")
 
     mm = await get_mm()
 
     updated = 0
     skipped = 0
     failed = 0
+    successfully_pushed_rows: list[dict] = []
 
     for i, row in enumerate(rows, start=1):
         try:
@@ -391,6 +556,7 @@ async def main():
 
             print(f"[{i}] Updated transaction {payload['transaction_id']}")
             updated += 1
+            successfully_pushed_rows.append(row)
 
         except TransportQueryError as e:
             failed += 1
@@ -403,7 +569,21 @@ async def main():
     print(f"\nDone. {mode}: {updated}, Skipped: {skipped}, Failed: {failed}")
 
     if dry_run and updated > 0:
-        print("Set DRY_RUN = False and run again to push for real.")
+        print("Set --dry-run false and run again to push for real.")
+        return
+
+    # ── Update local files ───────────────────────────────────────────────────
+    if update_local and successfully_pushed_rows:
+        print("\n🔄 Updating local CSV files...")
+        update_local_files(
+            successfully_pushed_rows,
+            category_map,
+            all_transactions_path,
+            unreviewed_path,
+        )
+        print("  ✅ Local files updated.")
+    elif update_local and not successfully_pushed_rows:
+        print("\nℹ️  No successful pushes — local files not updated.")
 
 
 if __name__ == "__main__":
