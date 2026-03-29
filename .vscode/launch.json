@@ -36,6 +36,36 @@
       "type": "promptString",
       "description": "Output CSV path for category group export",
       "default": "data/category_groups.csv"
+    },
+    {
+      "id": "groupNetReportOutput",
+      "type": "promptString",
+      "description": "Output CSV path for group net-by-year report",
+      "default": "data/group_net_by_year_report.csv"
+    },
+    {
+      "id": "copyTransactionIds",
+      "type": "promptString",
+      "description": "Transaction IDs to copy into push.csv (space, comma, semicolon, or newline separated)",
+      "default": ""
+    },
+    {
+      "id": "businessReportYear",
+      "type": "promptString",
+      "description": "Fiscal year for the business report",
+      "default": "2026"
+    },
+    {
+      "id": "businessReportBusiness",
+      "type": "promptString",
+      "description": "Business for the report (immanent or virtus)",
+      "default": "immanent"
+    },
+    {
+      "id": "businessReportOutput",
+      "type": "promptString",
+      "description": "Output Excel path for the business report",
+      "default": "data/immanent_business_report_2026.xlsx"
     }
   ],
   "configurations": [
@@ -95,6 +125,43 @@
       "args": [
         "--output",
         "${input:categoryGroupsOutput}"
+      ]
+    },
+    {
+      "name": "Python Debugger: Group net by year report",
+      "type": "debugpy",
+      "request": "launch",
+      "program": "${workspaceFolder}/report_group_net_by_year.py",
+      "console": "integratedTerminal",
+      "args": [
+        "--output",
+        "${input:groupNetReportOutput}"
+      ]
+    },
+    {
+      "name": "Python Debugger: Copy transactions to push",
+      "type": "debugpy",
+      "request": "launch",
+      "program": "${workspaceFolder}/copy_transactions_to_push.py",
+      "console": "integratedTerminal",
+      "args": [
+        "--transaction-ids",
+        "${input:copyTransactionIds}"
+      ]
+    },
+    {
+      "name": "Python Debugger: Business report",
+      "type": "debugpy",
+      "request": "launch",
+      "program": "${workspaceFolder}/business_report.py",
+      "console": "integratedTerminal",
+      "args": [
+        "--fiscal-year",
+        "${input:businessReportYear}",
+        "--business",
+        "${input:businessReportBusiness}",
+        "--output",
+        "${input:businessReportOutput}"
       ]
     },
     {
@@ -173,6 +240,63 @@
       "console": "integratedTerminal",
       "args": [
         "--output", "data/category_groups.csv"
+      ]
+    },
+
+    // -------------------------------------------------------
+    // GROUP NET REPORT: export to data folder
+    // -------------------------------------------------------
+    {
+      "name": "Group Net By Year Report",
+      "type": "debugpy",
+      "request": "launch",
+      "program": "${workspaceFolder}/report_group_net_by_year.py",
+      "console": "integratedTerminal",
+      "args": [
+        "--output", "data/group_net_by_year_report.csv"
+      ]
+    },
+
+    // -------------------------------------------------------
+    // COPY TRANSACTIONS: select rows into push.csv
+    // -------------------------------------------------------
+    {
+      "name": "Copy Transactions To Push",
+      "type": "debugpy",
+      "request": "launch",
+      "program": "${workspaceFolder}/copy_transactions_to_push.py",
+      "console": "integratedTerminal",
+      "args": "${command:pickArgs}"
+    },
+
+    // -------------------------------------------------------
+    // BUSINESS REPORT: export Excel workbook
+    // -------------------------------------------------------
+    {
+      "name": "Business Report",
+      "type": "debugpy",
+      "request": "launch",
+      "program": "${workspaceFolder}/business_report.py",
+      "console": "integratedTerminal",
+      "args": [
+        "--fiscal-year",
+        "${input:businessReportYear}",
+        "--business",
+        "${input:businessReportBusiness}",
+        "--output",
+        "${input:businessReportOutput}"
+      ]
+    },
+    {
+      "name": "Business Report - Immanent 2026",
+      "type": "debugpy",
+      "request": "launch",
+      "program": "${workspaceFolder}/business_report.py",
+      "console": "integratedTerminal",
+      "args": [
+        "--fiscal-year", "2026",
+        "--business", "immanent",
+        "--output", "data/immanent_business_report_2026.xlsx"
       ]
     }
   ]
