@@ -2,30 +2,6 @@
   "version": "0.2.0",
   "inputs": [
     {
-      "id": "pushDataDir",
-      "type": "promptString",
-      "description": "Data directory for categories.json and tags.json",
-      "default": "data"
-    },
-    {
-      "id": "pushInputFile",
-      "type": "promptString",
-      "description": "Push input CSV or JSON file",
-      "default": "push.csv"
-    },
-    {
-      "id": "pushDryRun",
-      "type": "promptString",
-      "description": "Dry run mode (true or false)",
-      "default": "TRUE"
-    },
-    {
-      "id": "pushUpdateLocal",
-      "type": "promptString",
-      "description": "Patch local all/unreviewed CSV files after live push (true or false)",
-      "default": "TRUE"
-    },
-    {
       "id": "unreviewedDataDir",
       "type": "promptString",
       "description": "Data directory for unreviewed transaction exports",
@@ -178,24 +154,6 @@
       ]
     },
     {
-      "name": "Push - Prompted",
-      "type": "debugpy",
-      "request": "launch",
-      "program": "${workspaceFolder}/push.py",
-      "cwd": "${workspaceFolder}",
-      "console": "integratedTerminal",
-      "args": [
-        "--data-dir",
-        "${input:pushDataDir}",
-        "--input-file",
-        "${input:pushInputFile}",
-        "--dry-run",
-        "${input:pushDryRun}",
-        "--update-local",
-        "${input:pushUpdateLocal}"
-      ]
-    },
-    {
       "name": "Push - Dry Run",
       "type": "debugpy",
       "request": "launch",
@@ -209,22 +167,6 @@
         "data/push.csv",
         "--dry-run",
         "true"
-      ]
-    },
-    {
-      "name": "Push - Live",
-      "type": "debugpy",
-      "request": "launch",
-      "program": "${workspaceFolder}/push.py",
-      "cwd": "${workspaceFolder}",
-      "console": "integratedTerminal",
-      "args": [
-        "--data-dir",
-        "data",
-        "--input-file",
-        "data/push.csv",
-        "--dry-run",
-        "false"
       ]
     },
     {
