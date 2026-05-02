@@ -2,11 +2,16 @@ import asyncio
 import json
 import csv
 import os
+import subprocess
+import sys
 from pathlib import Path
 import argparse
 
+from gql.transport.exceptions import TransportServerError
 from monarchmoney import MonarchMoney
 
+SESSION_FILE = Path(".mm/mm_session.pickle")
+LOGIN_SCRIPT = Path("login.py")
 DEFAULT_DATA_DIR = Path(os.environ.get("MONARCH_DATA_DIR", "data"))
 
 
@@ -21,6 +26,51 @@ def parse_args() -> argparse.Namespace:
     return parser.parse_args()
 
 
+async def get_mm() -> MonarchMoney:
+    if not SESSION_FILE.exists():
+        print(f"Session file not found: {SESSION_FILE}")
+        print(f"Running {LOGIN_SCRIPT}...")
+        result = subprocess.run([sys.executable, str(LOGIN_SCRIPT)], check=False)
+        if result.returncode != 0:
+            raise RuntimeError(
+                f"Unable to create a Monarch session. {LOGIN_SCRIPT} exited with code {result.returncode}."
+            )
+
+        if not SESSION_FILE.exists():
+            raise RuntimeError(
+                f"{LOGIN_SCRIPT} completed but did not create {SESSION_FILE}."
+            )
+
+    mm = MonarchMoney()
+    mm.load_session(str(SESSION_FILE))
+
+    try:
+        await mm.get_accounts()
+        return mm
+    except TransportServerError as e:
+        if "401" not in str(e):
+            raise
+
+        print("Saved session expired. Re-running login.py...")
+        result = subprocess.run([sys.executable, str(LOGIN_SCRIPT)], check=False)
+        if result.returncode != 0:
+            raise RuntimeError(
+                "Monarch session expired and automatic re-login failed. "
+                f"Please run `py .\\{LOGIN_SCRIPT}` and try again."
+            ) from e
+
+        if not SESSION_FILE.exists():
+            raise RuntimeError(
+                "Monarch re-login completed but no session file was saved. "
+                f"Expected: {SESSION_FILE}"
+            ) from e
+
+        mm = MonarchMoney()
+        mm.load_session(str(SESSION_FILE))
+        await mm.get_accounts()
+        return mm
+
+
 async def main():
     args = parse_args()
     data_dir = args.data_dir
@@ -31,8 +81,7 @@ async def main():
     tags_json = data_dir / "tags.json"
     tags_csv = data_dir / "tags.csv"
 
-    mm = MonarchMoney()
-    mm.load_session()
+    mm = await get_mm()
 
     print("Fetching categories...")
     cats = await mm.get_transaction_categories()

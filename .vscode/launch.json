@@ -50,6 +50,16 @@
       "default": ""
     },
     {
+      "id": "filterUnreviewedKind",
+      "type": "pickString",
+      "description": "Filter unreviewed transactions by accounts or merchants?",
+      "options": [
+        "merchants",
+        "accounts"
+      ],
+      "default": "merchants"
+    },
+    {
       "id": "businessReportYear",
       "type": "promptString",
       "description": "Fiscal year for the business report",
@@ -147,6 +157,18 @@
       "args": [
         "--transaction-ids",
         "${input:copyTransactionIds}"
+      ]
+    },
+    {
+      "name": "Python Debugger: Filter unreviewed to push",
+      "type": "debugpy",
+      "request": "launch",
+      "program": "${workspaceFolder}/filter_unreviewed_to_push.py",
+      "cwd": "${workspaceFolder}",
+      "console": "integratedTerminal",
+      "args": [
+        "--filter-type",
+        "${input:filterUnreviewedKind}"
       ]
     },
     {
