@@ -177,9 +177,15 @@ def sort_rows(
             return ""
         return normalize(row.get(column, ""), case_sensitive=case_sensitive)
 
+    primary_counts: dict[str, int] = {}
+    for row in rows:
+        value = sort_value(row, primary_column)
+        primary_counts[value] = primary_counts.get(value, 0) + 1
+
     return sorted(
         rows,
         key=lambda row: (
+            -primary_counts[sort_value(row, primary_column)],
             sort_value(row, primary_column),
             sort_value(row, secondary_column),
             normalize(row.get(id_column, ""), case_sensitive=case_sensitive),

@@ -20,6 +20,12 @@
       "default": "TRUE"
     },
     {
+      "id": "pushUpdateLocal",
+      "type": "promptString",
+      "description": "Patch local all/unreviewed CSV files after live push (true or false)",
+      "default": "TRUE"
+    },
+    {
       "id": "unreviewedDataDir",
       "type": "promptString",
       "description": "Data directory for unreviewed transaction exports",
@@ -29,7 +35,7 @@
       "id": "unreviewedFilename",
       "type": "promptString",
       "description": "Base filename for unreviewed transaction exports",
-      "default": "unreviewed_only_transactions"
+      "default": "unreviewed_transactions"
     },
     {
       "id": "categoryGroupsOutput",
@@ -42,6 +48,12 @@
       "type": "promptString",
       "description": "Output CSV path for group net-by-year report",
       "default": "data/group_net_by_year_report.csv"
+    },
+    {
+      "id": "unreviewedPivotOutput",
+      "type": "promptString",
+      "description": "Output Excel path for the unreviewed pivot report",
+      "default": "data/unreviewed_pivots.xlsx"
     },
     {
       "id": "copyTransactionIds",
@@ -80,57 +92,27 @@
   ],
   "configurations": [
     {
-      "name": "Python Debugger: Pull cats and tags into data folder",
-      "type": "debugpy",
-      "request": "launch",
-      "program": "${workspaceFolder}/pull_cats_tags.py",
-      "console": "integratedTerminal",
-      "args": "${command:pickArgs}"
-    },
-    {
-      "name": "Python Debugger: Login",
+      "name": "Auth - Login",
       "type": "debugpy",
       "request": "launch",
       "program": "${workspaceFolder}/login.py",
-      "console": "integratedTerminal",
-      "args": "${command:pickArgs}"
+      "cwd": "${workspaceFolder}",
+      "console": "integratedTerminal"
     },
     {
-      "name": "Python Debugger: Current File with Arguments",
+      "name": "Pull - Categories and Tags",
       "type": "debugpy",
       "request": "launch",
-      "program": "${file}",
-      "console": "integratedTerminal",
-      "args": "${command:pickArgs}"
+      "program": "${workspaceFolder}/pull_cats_tags.py",
+      "cwd": "${workspaceFolder}",
+      "console": "integratedTerminal"
     },
     {
-      "name": "Python Debugger: Push",
-      "type": "debugpy",
-      "request": "launch",
-      "program": "${workspaceFolder}/push.py",
-      "console": "integratedTerminal",
-      "args": [
-        "--data-dir",
-        "${input:pushDataDir}",
-        "--input-file",
-        "${input:pushInputFile}",
-        "--dry-run",
-        "${input:pushDryRun}"
-      ]
-    },
-    {
-      "name": "Python Debugger: Pull transactions and persist batches",
-      "type": "debugpy",
-      "request": "launch",
-      "program": "${workspaceFolder}/pull_transactions_persist_batches.py",
-      "console": "integratedTerminal",
-      "args": "${command:pickArgs}"
-    },
-    {
-      "name": "Python Debugger: Pull category groups",
+      "name": "Pull - Category Groups",
       "type": "debugpy",
       "request": "launch",
       "program": "${workspaceFolder}/pull_category_groups.py",
+      "cwd": "${workspaceFolder}",
       "console": "integratedTerminal",
       "args": [
         "--output",
@@ -138,29 +120,41 @@
       ]
     },
     {
-      "name": "Python Debugger: Group net by year report",
+      "name": "Pull - Transactions and Unreviewed",
       "type": "debugpy",
       "request": "launch",
-      "program": "${workspaceFolder}/report_group_net_by_year.py",
+      "program": "${workspaceFolder}/pull_transactions_persist_batches.py",
+      "cwd": "${workspaceFolder}",
+      "console": "integratedTerminal"
+    },
+    {
+      "name": "Pull - Unreviewed Only",
+      "type": "debugpy",
+      "request": "launch",
+      "program": "${workspaceFolder}/get_unreviewed.py",
+      "cwd": "${workspaceFolder}",
+      "console": "integratedTerminal",
+      "args": [
+        "--data-dir",
+        "${input:unreviewedDataDir}",
+        "--filename",
+        "${input:unreviewedFilename}"
+      ]
+    },
+    {
+      "name": "Review - Unreviewed Pivot Report",
+      "type": "debugpy",
+      "request": "launch",
+      "program": "${workspaceFolder}/report_unreviewed_pivots.py",
+      "cwd": "${workspaceFolder}",
       "console": "integratedTerminal",
       "args": [
         "--output",
-        "${input:groupNetReportOutput}"
+        "${input:unreviewedPivotOutput}"
       ]
     },
     {
-      "name": "Python Debugger: Copy transactions to push",
-      "type": "debugpy",
-      "request": "launch",
-      "program": "${workspaceFolder}/copy_transactions_to_push.py",
-      "console": "integratedTerminal",
-      "args": [
-        "--transaction-ids",
-        "${input:copyTransactionIds}"
-      ]
-    },
-    {
-      "name": "Python Debugger: Filter unreviewed to push",
+      "name": "Review - Filter Unreviewed To Push",
       "type": "debugpy",
       "request": "launch",
       "program": "${workspaceFolder}/filter_unreviewed_to_push.py",
@@ -172,133 +166,107 @@
       ]
     },
     {
-      "name": "Python Debugger: Business report",
+      "name": "Review - Copy Transaction IDs To Push",
       "type": "debugpy",
       "request": "launch",
-      "program": "${workspaceFolder}/business_report.py",
+      "program": "${workspaceFolder}/copy_transaction_ids_to_push.py",
+      "cwd": "${workspaceFolder}",
       "console": "integratedTerminal",
       "args": [
-        "--fiscal-year",
-        "${input:businessReportYear}",
-        "--business",
-        "${input:businessReportBusiness}",
-        "--output",
-        "${input:businessReportOutput}"
+        "--transaction-ids",
+        "${input:copyTransactionIds}"
       ]
     },
     {
-      "name": "Python Debugger: Get unreviewed",
+      "name": "Push - Prompted",
       "type": "debugpy",
       "request": "launch",
-      "program": "${workspaceFolder}/get_unreviewed.py",
+      "program": "${workspaceFolder}/push.py",
+      "cwd": "${workspaceFolder}",
       "console": "integratedTerminal",
       "args": [
         "--data-dir",
-        "${input:unreviewedDataDir}",
-        "--filename",
-        "${input:unreviewedFilename}"
+        "${input:pushDataDir}",
+        "--input-file",
+        "${input:pushInputFile}",
+        "--dry-run",
+        "${input:pushDryRun}",
+        "--update-local",
+        "${input:pushUpdateLocal}"
       ]
     },
-
-    // -------------------------------------------------------
-    // PUSH: dry run, no local file update
-    // -------------------------------------------------------
     {
-      "name": "Push — DRY RUN",
+      "name": "Push - Dry Run",
       "type": "debugpy",
       "request": "launch",
       "program": "${workspaceFolder}/push.py",
+      "cwd": "${workspaceFolder}",
       "console": "integratedTerminal",
       "args": [
-        "--data-dir",   "data",
-        "--input-file", "data/push.csv",
-        "--dry-run",    "true"
+        "--data-dir",
+        "data",
+        "--input-file",
+        "data/push.csv",
+        "--dry-run",
+        "true"
       ]
     },
-
-    // -------------------------------------------------------
-    // PUSH: LIVE, no local file update
-    // -------------------------------------------------------
     {
-      "name": "Push — 🚨 LIVE",
+      "name": "Push - Live",
       "type": "debugpy",
       "request": "launch",
       "program": "${workspaceFolder}/push.py",
+      "cwd": "${workspaceFolder}",
       "console": "integratedTerminal",
       "args": [
-        "--data-dir",   "data",
-        "--input-file", "data/push.csv",
-        "--dry-run",    "false"
+        "--data-dir",
+        "data",
+        "--input-file",
+        "data/push.csv",
+        "--dry-run",
+        "false"
       ]
     },
-
-    // -------------------------------------------------------
-    // PUSH + UPDATE LOCAL: LIVE, patches local CSVs after push
-    // -------------------------------------------------------
     {
-      "name": "Push — 🚨 LIVE + Update Local",
+      "name": "Push - Live + Update Local",
       "type": "debugpy",
       "request": "launch",
       "program": "${workspaceFolder}/push.py",
+      "cwd": "${workspaceFolder}",
       "console": "integratedTerminal",
       "args": [
-        "--data-dir",         "data",
-        "--input-file",       "data/push.csv",
-        "--dry-run",          "false",
-        "--update-local",     "true",
-        "--all-transactions", "data/all_transactions.csv",
-        "--unreviewed-file",  "data/unreviewed_transactions.csv"
+        "--data-dir",
+        "data",
+        "--input-file",
+        "data/push.csv",
+        "--dry-run",
+        "false",
+        "--update-local",
+        "true",
+        "--all-transactions",
+        "data/all_transactions.csv",
+        "--unreviewed-file",
+        "data/unreviewed_transactions.csv"
       ]
     },
-
-    // -------------------------------------------------------
-    // PULL CATEGORY GROUPS: export to data folder
-    // -------------------------------------------------------
     {
-      "name": "Pull Category Groups",
-      "type": "debugpy",
-      "request": "launch",
-      "program": "${workspaceFolder}/pull_category_groups.py",
-      "console": "integratedTerminal",
-      "args": [
-        "--output", "data/category_groups.csv"
-      ]
-    },
-
-    // -------------------------------------------------------
-    // GROUP NET REPORT: export to data folder
-    // -------------------------------------------------------
-    {
-      "name": "Group Net By Year Report",
+      "name": "Reports - Group Net By Year",
       "type": "debugpy",
       "request": "launch",
       "program": "${workspaceFolder}/report_group_net_by_year.py",
+      "cwd": "${workspaceFolder}",
       "console": "integratedTerminal",
       "args": [
-        "--output", "data/group_net_by_year_report.csv"
+        "--output",
+        "${input:groupNetReportOutput}"
       ]
     },
-
-    // -------------------------------------------------------
-    // COPY TRANSACTIONS: select rows into push.csv
-    // -------------------------------------------------------
     {
-      "name": "Copy Transactions To Push",
-      "type": "debugpy",
-      "request": "launch",
-      "program": "${workspaceFolder}/copy_transactions_to_push.py",
-      "console": "integratedTerminal",
-      "args": "${command:pickArgs}"
-    },
-
-    // -------------------------------------------------------
-    // BUSINESS REPORT: export Excel workbook
-    // -------------------------------------------------------
-    {
-      "name": "Business Report",
+      "name": "Reports - Business",
       "type": "debugpy",
       "request": "launch",
       "program": "${workspaceFolder}/business_report.py",
+      "cwd": "${workspaceFolder}",
       "console": "integratedTerminal",
       "args": [
         "--fiscal-year",
@@ -310,16 +278,29 @@
       ]
     },
     {
-      "name": "Business Report - Immanent 2026",
+      "name": "Reports - Business - Immanent 2026",
       "type": "debugpy",
       "request": "launch",
       "program": "${workspaceFolder}/business_report.py",
+      "cwd": "${workspaceFolder}",
       "console": "integratedTerminal",
       "args": [
-        "--fiscal-year", "2026",
-        "--business", "immanent",
-        "--output", "data/immanent_business_report_2026.xlsx"
+        "--fiscal-year",
+        "2026",
+        "--business",
+        "immanent",
+        "--output",
+        "data/immanent_business_report_2026.xlsx"
       ]
+    },
+    {
+      "name": "Tools - Current File With Arguments",
+      "type": "debugpy",
+      "request": "launch",
+      "program": "${file}",
+      "cwd": "${workspaceFolder}",
+      "console": "integratedTerminal",
+      "args": "${command:pickArgs}"
     }
   ]
 }

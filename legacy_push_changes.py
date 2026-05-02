@@ -1,16 +1,26 @@
 """
-push_changes.py
----------------
-Read a reviewed transaction CSV and push changes back to Monarch Money.
-Marks transactions as reviewed and applies edits to merchant_name,
-category_id, notes, and hide_from_reports.
+legacy_push_changes.py
+----------------------
+Legacy alternate pusher for older review CSVs.
+
+For normal review/push work, use push.py. This file is kept only as a
+reference path for older flat files that already contain internal Monarch
+fields such as id, merchant_name, category_id, hide_from_reports, and
+needs_review. It can be useful when reviewing historical exports or debugging
+whether an issue belongs to friendly-name mapping in push.py versus the raw
+Monarch update payload.
+
+Compared with push.py, this script intentionally does not resolve category or
+tag names from data/categories.json and data/tags.json. That makes it less
+friendly for day-to-day review, but occasionally useful for narrow tests where
+the CSV already has raw Monarch IDs.
 
 Self-contained — no monarch_utils dependency. Session handling mirrors push.py.
 
 Usage:
-    python push_changes.py                              # dry run (safe default)
-    python push_changes.py --dry-run false              # LIVE push
-    python push_changes.py --dry-run false --update-local true
+    python legacy_push_changes.py                              # dry run
+    python legacy_push_changes.py --dry-run false              # LIVE push
+    python legacy_push_changes.py --dry-run false --update-local true
 
 Arguments:
     --input             Source CSV path                       (default: push.csv)
@@ -318,7 +328,7 @@ async def main() -> None:
         else input_path
     )
 
-    print(f"{'DRY RUN' if dry_run else 'LIVE'} - push_changes.py")
+    print(f"{'DRY RUN' if dry_run else 'LIVE'} - legacy_push_changes.py")
     print(f"  Input : {input_path}")
     if not dry_run and update_local:
         print(f"  all_transactions : {all_transactions_path}")

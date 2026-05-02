@@ -6,7 +6,7 @@ from pathlib import Path
 
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(
-        description="Copy selected transactions from all_transactions.csv into push.csv."
+        description="Copy selected transaction IDs from all_transactions.csv into push.csv."
     )
     parser.add_argument(
         "transaction_ids",

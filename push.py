@@ -78,7 +78,7 @@ def parse_args() -> argparse.Namespace:
         default=None,
         help=(
             "Path to the unreviewed transactions CSV to patch when --update-local is set. "
-            "Defaults to the resolved --input-file path."
+            "Defaults to <data-dir>/unreviewed_transactions.csv."
         ),
     )
     return parser.parse_args()
@@ -354,7 +354,14 @@ def build_update_payload(
 # ── Local file patching ──────────────────────────────────────────────────────
 
 UPDATABLE_COLS = [
-    "Merchant", "Category", "Notes", "Hide From Reports", "Needs Review", "Tags",
+    "Date",
+    "Merchant",
+    "Amount",
+    "Category",
+    "Notes",
+    "Hide From Reports",
+    "Needs Review",
+    "Tags",
 ]
 
 
@@ -489,7 +496,7 @@ async def main():
 
     # Resolve local file paths for --update-local
     all_transactions_path = args.all_transactions or (data_dir / "all_transactions.csv")
-    unreviewed_path = args.unreviewed_file or input_file
+    unreviewed_path = args.unreviewed_file or (data_dir / "unreviewed_transactions.csv")
 
     categories_file = data_dir / "categories.json"
     tags_file = data_dir / "tags.json"

@@ -17,8 +17,21 @@ from monarchmoney import MonarchMoney
 SESSION_FILE = Path(".mm/mm_session.pickle")
 LOGIN_SCRIPT = Path("login.py")
 DEFAULT_DATA_DIR = Path(os.environ.get("MONARCH_DATA_DIR", "data"))
-DEFAULT_OUTPUT_BASENAME = "unreviewed_only_transactions"
+DEFAULT_OUTPUT_BASENAME = "unreviewed_transactions"
 BATCH_SIZE = 400  # configurable
+CSV_HEADERS = [
+    "Transaction ID",
+    "Account",
+    "Date",
+    "Merchant",
+    "Plaid Name",
+    "Amount",
+    "Category",
+    "Tags",
+    "Notes",
+    "Hide From Reports",
+    "Needs Review",
+]
 
 
 def parse_args() -> argparse.Namespace:
@@ -33,6 +46,15 @@ def parse_args() -> argparse.Namespace:
         "--filename",
         default=DEFAULT_OUTPUT_BASENAME,
         help="Base filename for the exported unreviewed transaction files, without extension.",
+    )
+    parser.add_argument(
+        "--all-transactions",
+        type=Path,
+        default=None,
+        help=(
+            "Path to all_transactions.csv to upsert with fetched unreviewed rows. "
+            "Defaults to <data-dir>/all_transactions.csv."
+        ),
     )
     return parser.parse_args()
 
@@ -123,8 +145,8 @@ def flatten_transaction(txn: dict) -> dict:
         "Transaction ID": txn.get("id"),
         "Account": account.get("displayName"),
         "Date": txn.get("date"),
-        "Merchant": merchant.get("name"),
-        "Plaid Name": txn.get("plaidName"),
+        "Merchant": merchant.get("name") or txn.get("merchantName"),
+        "Plaid Name": txn.get("plaidName") or txn.get("originalName"),
         "Amount": txn.get("amount"),
         "Category": category.get("name"),
         "Tags": ",".join(str(t.get("name")) for t in tags if t.get("name")),
@@ -134,34 +156,76 @@ def flatten_transaction(txn: dict) -> dict:
     }
 
 
+def flatten_transactions(rows: list[dict]) -> list[dict]:
+    return [flatten_transaction(row) for row in rows]
+
+
 def write_json(path: Path, rows: list[dict]) -> None:
-    flattened = [flatten_transaction(row) for row in rows]
+    flattened = flatten_transactions(rows)
     with open(path, "w", encoding="utf-8") as f:
         json.dump(flattened, f, indent=2, default=str)
 
 
-def write_csv(path: Path, rows: list[dict]) -> None:
-    flat_rows = [flatten_transaction(row) for row in rows]
-
-    headers = [
-        "Transaction ID",
-        "Account",
-        "Date",
-        "Merchant",
-        "Plaid Name",
-        "Amount",
-        "Category",
-        "Tags",
-        "Notes",
-        "Hide From Reports",
-        "Needs Review",
-    ]
-
+def write_csv_rows(path: Path, fieldnames: list[str], rows: list[dict]) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
     with open(path, "w", newline="", encoding="utf-8") as f:
-        writer = csv.DictWriter(f, fieldnames=headers, extrasaction="ignore")
+        writer = csv.DictWriter(f, fieldnames=fieldnames, extrasaction="ignore")
         writer.writeheader()
-        if flat_rows:
-            writer.writerows(flat_rows)
+        writer.writerows(rows)
+
+
+def write_csv(path: Path, rows: list[dict]) -> None:
+    write_csv_rows(path, CSV_HEADERS, flatten_transactions(rows))
+
+
+def read_csv_rows(path: Path) -> tuple[list[str], list[dict]]:
+    if not path.exists():
+        return list(CSV_HEADERS), []
+
+    with open(path, "r", encoding="utf-8-sig", newline="") as f:
+        reader = csv.DictReader(f)
+        if reader.fieldnames is None:
+            return list(CSV_HEADERS), []
+        return list(reader.fieldnames), list(reader)
+
+
+def upsert_all_transactions_csv(path: Path, transactions: list[dict]) -> tuple[int, int]:
+    incoming_rows = flatten_transactions(transactions)
+    fieldnames, existing_rows = read_csv_rows(path)
+
+    for header in CSV_HEADERS:
+        if header not in fieldnames:
+            fieldnames.append(header)
+
+    rows_by_id = {
+        str(row.get("Transaction ID") or row.get("id") or "").strip(): row
+        for row in existing_rows
+        if str(row.get("Transaction ID") or row.get("id") or "").strip()
+    }
+
+    updated = 0
+    appended = 0
+    for incoming in incoming_rows:
+        transaction_id = str(incoming.get("Transaction ID") or "").strip()
+        if not transaction_id:
+            continue
+
+        existing = rows_by_id.get(transaction_id)
+        if existing is None:
+            new_row = {field: "" for field in fieldnames}
+            for field in CSV_HEADERS:
+                new_row[field] = incoming.get(field, "")
+            existing_rows.append(new_row)
+            rows_by_id[transaction_id] = new_row
+            appended += 1
+            continue
+
+        for field in CSV_HEADERS:
+            existing[field] = incoming.get(field, "")
+        updated += 1
+
+    write_csv_rows(path, fieldnames, existing_rows)
+    return updated, appended
 
 
 async def main():
@@ -172,10 +236,13 @@ async def main():
 
     unreviewed_json = data_dir / f"{output_basename}.json"
     unreviewed_csv = data_dir / f"{output_basename}.csv"
+    all_transactions_csv = args.all_transactions or (data_dir / "all_transactions.csv")
 
     mm = await get_mm()
 
     unreviewed_transactions: list[dict] = []
+    write_json(unreviewed_json, unreviewed_transactions)
+    write_csv(unreviewed_csv, unreviewed_transactions)
     offset = 0
     batch_num = 0
 
@@ -191,10 +258,16 @@ async def main():
 
         unreviewed_transactions.extend(transactions)
 
+        updated, appended = upsert_all_transactions_csv(all_transactions_csv, transactions)
         write_json(unreviewed_json, unreviewed_transactions)
         write_csv(unreviewed_csv, unreviewed_transactions)
 
-        print(f"Saved after batch {batch_num}: {len(unreviewed_transactions)} unreviewed")
+        print(
+            f"Saved after batch {batch_num}: "
+            f"{len(unreviewed_transactions)} unreviewed, "
+            f"{updated} updated in all_transactions.csv, "
+            f"{appended} appended"
+        )
 
         if len(transactions) < BATCH_SIZE:
             print("Last partial batch received. Finished.")
@@ -203,6 +276,7 @@ async def main():
         offset += BATCH_SIZE
 
     print("Done.")
+    print(f"All transactions CSV: {all_transactions_csv.resolve()}")
     print(f"Unreviewed JSON: {unreviewed_json.resolve()}")
     print(f"Unreviewed CSV:  {unreviewed_csv.resolve()}")
 
