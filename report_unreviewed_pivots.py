@@ -254,7 +254,14 @@ def format_workbook(writer: pd.ExcelWriter) -> None:
             )
 
 
-def write_report(output_path: Path, df: pd.DataFrame) -> None:
+def is_locked_file_error(error: OSError) -> bool:
+    return isinstance(error, PermissionError) or getattr(error, "winerror", None) in {
+        32,
+        33,
+    }
+
+
+def write_report(output_path: Path, df: pd.DataFrame) -> bool:
     output_path.parent.mkdir(parents=True, exist_ok=True)
 
     sheets = {
@@ -268,19 +275,30 @@ def write_report(output_path: Path, df: pd.DataFrame) -> None:
         "Raw Unreviewed": append_total_row(raw_unreviewed(df)),
     }
 
-    with pd.ExcelWriter(output_path, engine="openpyxl") as writer:
-        for sheet_name, sheet_df in sheets.items():
-            sheet_df.to_excel(writer, index=False, sheet_name=sheet_name)
-        format_workbook(writer)
+    try:
+        with pd.ExcelWriter(output_path, engine="openpyxl") as writer:
+            for sheet_name, sheet_df in sheets.items():
+                sheet_df.to_excel(writer, index=False, sheet_name=sheet_name)
+            format_workbook(writer)
+    except OSError as e:
+        if not is_locked_file_error(e):
+            raise
+        print(f"WARNING: Could not write {output_path}.")
+        print("         It may be open in Excel. Close it and run the report again.")
+        return False
+
+    return True
 
 
 def main() -> None:
     args = parse_args()
     transactions_df = read_csv(args.transactions)
     prepared_df = prepare_transactions(transactions_df, args.transactions)
-    write_report(args.output, prepared_df)
 
     print(f"Read {len(prepared_df)} unreviewed transaction rows from {args.transactions}")
+    if not write_report(args.output, prepared_df):
+        return
+
     print(f"Saved unreviewed pivot workbook to {args.output}")
 
 

@@ -26,6 +26,18 @@
       "default": "data/group_net_by_year_report.csv"
     },
     {
+      "id": "yearlyPivotSource",
+      "type": "promptString",
+      "description": "Source CSV path for yearly amount pivots",
+      "default": "data/all_transactions.csv"
+    },
+    {
+      "id": "yearlyPivotOutput",
+      "type": "promptString",
+      "description": "Output Excel path for yearly amount pivots",
+      "default": "data/yearly_amount_pivots.xlsx"
+    },
+    {
       "id": "unreviewedPivotOutput",
       "type": "promptString",
       "description": "Output Excel path for the unreviewed pivot report",
@@ -40,11 +52,12 @@
     {
       "id": "filterKind",
       "type": "pickString",
-      "description": "Filter transactions by accounts, merchants, or categories?",
+      "description": "Filter transactions by accounts, merchants, categories, or groups?",
       "options": [
         "merchants",
         "accounts",
-        "categories"
+        "categories",
+        "groups"
       ],
       "default": "merchants"
     },
@@ -235,6 +248,26 @@
       ]
     },
     {
+      "name": "Push - Post-Failure Local Update",
+      "type": "debugpy",
+      "request": "launch",
+      "program": "${workspaceFolder}/push.py",
+      "cwd": "${workspaceFolder}",
+      "console": "integratedTerminal",
+      "args": [
+        "--data-dir",
+        "data",
+        "--input-file",
+        "${input:pushInputFile}",
+        "--local-only",
+        "true",
+        "--all-transactions",
+        "data/all_transactions.csv",
+        "--unreviewed-file",
+        "data/unreviewed_transactions.csv"
+      ]
+    },
+    {
       "name": "Reports - Group Net By Year",
       "type": "debugpy",
       "request": "launch",
@@ -244,6 +277,20 @@
       "args": [
         "--output",
         "${input:groupNetReportOutput}"
+      ]
+    },
+    {
+      "name": "Reports - Yearly Amount Pivots",
+      "type": "debugpy",
+      "request": "launch",
+      "program": "${workspaceFolder}/report_yearly_amount_pivots.py",
+      "cwd": "${workspaceFolder}",
+      "console": "integratedTerminal",
+      "args": [
+        "--transactions",
+        "${input:yearlyPivotSource}",
+        "--output",
+        "${input:yearlyPivotOutput}"
       ]
     },
     {

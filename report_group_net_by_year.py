@@ -46,7 +46,26 @@ def parse_date(value: str) -> datetime:
 
 
 def parse_amount(value: str) -> float:
-    return float(value.replace(",", "").strip())
+    text = value.strip()
+    is_parenthesized = text.startswith("(") and text.endswith(")")
+    if is_parenthesized:
+        text = text[1:-1].strip()
+
+    text = text.replace(",", "").replace("$", "")
+    amount = float(text)
+    return -abs(amount) if is_parenthesized else amount
+
+
+def is_locked_file_error(error: OSError) -> bool:
+    return isinstance(error, PermissionError) or getattr(error, "winerror", None) in {
+        32,
+        33,
+    }
+
+
+def warn_locked_output(path: Path) -> None:
+    print(f"WARNING: Could not write {path}.")
+    print("         It may be open in Excel. Close it and run the report again.")
 
 
 def load_category_group_map(path: Path) -> dict[str, str]:
@@ -90,25 +109,33 @@ def build_totals(
     return totals, row_count
 
 
-def write_report(path: Path, totals: dict[int, dict[str, float]]) -> None:
+def write_report(path: Path, totals: dict[int, dict[str, float]]) -> bool:
     path.parent.mkdir(parents=True, exist_ok=True)
     current_year = datetime.now().year
     years = sorted(totals.keys(), reverse=True)
     years = sorted(years, key=lambda year: (year != current_year, -year))
 
-    with open(path, "w", encoding="utf-8-sig", newline="") as f:
-        writer = csv.writer(f)
+    try:
+        with open(path, "w", encoding="utf-8-sig", newline="") as f:
+            writer = csv.writer(f)
 
-        for index, year in enumerate(years):
-            writer.writerow([str(year)])
-            writer.writerow(["Group Name", "Net Income/Expense"])
-            for group_name, total in sorted(
-                totals[year].items(), key=lambda item: item[0].lower()
-            ):
-                writer.writerow([group_name, f"{total:.2f}"])
+            for index, year in enumerate(years):
+                writer.writerow([str(year)])
+                writer.writerow(["Group Name", "Net Income/Expense"])
+                for group_name, total in sorted(
+                    totals[year].items(), key=lambda item: item[0].lower()
+                ):
+                    writer.writerow([group_name, f"{total:.2f}"])
 
-            if index < len(years) - 1:
-                writer.writerow([])
+                if index < len(years) - 1:
+                    writer.writerow([])
+    except OSError as e:
+        if not is_locked_file_error(e):
+            raise
+        warn_locked_output(path)
+        return False
+
+    return True
 
 
 def main() -> None:
@@ -117,7 +144,8 @@ def main() -> None:
     totals, row_count = build_totals(
         args.transactions, category_to_group, args.include_unmapped
     )
-    write_report(args.output, totals)
+    if not write_report(args.output, totals):
+        return
 
     print(f"Read {row_count} transaction rows from {args.transactions}")
     print(f"Loaded {len(category_to_group)} category-to-group mappings from {args.groups}")

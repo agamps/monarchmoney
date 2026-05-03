@@ -64,6 +64,15 @@ def parse_args() -> argparse.Namespace:
         ),
     )
     parser.add_argument(
+        "--local-only",
+        type=normalize_bool,
+        default=False,
+        help=(
+            "Skip Monarch API calls and only patch local CSV files from --input-file. "
+            "Use after a live push succeeds but local CSV files were locked."
+        ),
+    )
+    parser.add_argument(
         "--all-transactions",
         type=Path,
         default=None,
@@ -398,20 +407,71 @@ def load_csv_df(path: Path) -> pd.DataFrame:
     raise ValueError(f"Could not decode {path}")
 
 
-def update_local_files(
-    pushed_rows: list[dict],
-    category_map: dict[str, str],
+def is_locked_file_error(error: OSError) -> bool:
+    return isinstance(error, PermissionError) or getattr(error, "winerror", None) in {
+        32,
+        33,
+    }
+
+
+def load_csv_df_or_warn(path: Path) -> pd.DataFrame | None:
+    try:
+        return load_csv_df(path)
+    except OSError as e:
+        if not is_locked_file_error(e):
+            raise
+        print(f"  WARNING: Could not read {path}.")
+        print("           It may be open in Excel. Close it and run local update again.")
+        return None
+
+
+def atomic_write_csv_or_warn(df: pd.DataFrame, path: Path) -> bool:
+    try:
+        atomic_write_csv(df, path)
+        return True
+    except OSError as e:
+        if not is_locked_file_error(e):
+            raise
+        print(f"  WARNING: Could not update {path}.")
+        print("           It may be open in Excel. Close it and run local update again.")
+        return False
+
+
+def local_recovery_command(
+    data_dir: Path,
+    input_file: Path,
     all_transactions_path: Path,
     unreviewed_path: Path,
-) -> None:
-    # Build a lookup: transaction_id → row dict for all successfully pushed rows
+) -> str:
+    command = [
+        sys.executable,
+        str(Path(__file__)),
+        "--data-dir",
+        str(data_dir),
+        "--input-file",
+        str(input_file),
+        "--local-only",
+        "true",
+        "--all-transactions",
+        str(all_transactions_path),
+        "--unreviewed-file",
+        str(unreviewed_path),
+    ]
+    return subprocess.list2cmdline(command)
+
+
+def update_local_files(
+    pushed_rows: list[dict],
+    _category_map: dict[str, str],
+    all_transactions_path: Path,
+    unreviewed_path: Path,
+) -> bool:
+    # Build a lookup of all successfully pushed rows by transaction ID.
     pushed_by_id = {
         str(clean_str(r.get("Transaction ID") or r.get("id"))): r
         for r in pushed_rows
     }
-
-    # Reverse category map: id → name (for writing back readable names)
-    cat_id_to_name = {v: k for k, v in category_map.items()}
+    completed = True
 
     def apply_row_updates(df: pd.DataFrame) -> pd.DataFrame:
         id_col = next((c for c in df.columns if c.strip().lower() in ("transaction id", "id")), None)
@@ -427,18 +487,29 @@ def update_local_files(
                     df.at[idx, col] = pushed[col] if pushed[col] is not None else ""
         return df
 
-    # ── Patch all_transactions.csv ───────────────────────────────────────────
-    if all_transactions_path.exists():
-        df = load_csv_df(all_transactions_path)
-        df = apply_row_updates(df)
-        atomic_write_csv(df, all_transactions_path)
-        print(f"  📝 {all_transactions_path.name} — {len(pushed_by_id)} row(s) updated")
-    else:
-        print(f"  ⚠️  {all_transactions_path} not found — skipped")
+    all_df_for_unreviewed = None
 
-    # ── Patch unreviewed_transactions CSV ────────────────────────────────────
+    # Patch all_transactions.csv.
+    if all_transactions_path.exists():
+        df = load_csv_df_or_warn(all_transactions_path)
+        if df is None:
+            completed = False
+        else:
+            all_df_for_unreviewed = apply_row_updates(df)
+            if atomic_write_csv_or_warn(all_df_for_unreviewed, all_transactions_path):
+                print(f"  Updated {all_transactions_path.name}: {len(pushed_by_id)} row(s)")
+            else:
+                completed = False
+    else:
+        print(f"  WARNING: {all_transactions_path} not found; skipped.")
+        completed = False
+
+    # Patch unreviewed_transactions.csv.
     if unreviewed_path.exists():
-        df = load_csv_df(unreviewed_path)
+        df = load_csv_df_or_warn(unreviewed_path)
+        if df is None:
+            return False
+
         df = apply_row_updates(df)
 
         # Find the Needs Review column (handle either naming convention)
@@ -458,7 +529,7 @@ def update_local_files(
         # Add back any rows flipped back to Needs Review = True.
         # Source the full row from all_transactions.csv so we have all columns.
         added = 0
-        if all_transactions_path.exists() and nr_col:
+        if all_df_for_unreviewed is not None and nr_col:
             unrev_id_col = next(
                 (c for c in df.columns if c.strip().lower() in ("transaction id", "id")),
                 None,
@@ -467,7 +538,7 @@ def update_local_files(
                 set(df[unrev_id_col].astype(str).str.strip())
                 if unrev_id_col else set()
             )
-            all_df = load_csv_df(all_transactions_path)
+            all_df = all_df_for_unreviewed
             all_id_col = next(
                 (c for c in all_df.columns if c.strip().lower() in ("transaction id", "id")),
                 None,
@@ -487,15 +558,20 @@ def update_local_files(
                 df = pd.concat([df, new_row], ignore_index=True)
                 added += 1
 
-        atomic_write_csv(df, unreviewed_path)
-        print(
-            f"  📝 {unreviewed_path.name} — "
-            f"{dropped} row(s) removed (reviewed), "
-            f"{added} row(s) added back (unreviewed), "
-            f"{len(df)} remaining"
-        )
+        if atomic_write_csv_or_warn(df, unreviewed_path):
+            print(
+                f"  Updated {unreviewed_path.name}: "
+                f"{dropped} row(s) removed (reviewed), "
+                f"{added} row(s) added back (unreviewed), "
+                f"{len(df)} remaining"
+            )
+        else:
+            completed = False
     else:
-        print(f"  ⚠️  {unreviewed_path} not found — skipped")
+        print(f"  WARNING: {unreviewed_path} not found; skipped.")
+        completed = False
+
+    return completed
 
 
 # ── Main ─────────────────────────────────────────────────────────────────────
@@ -506,6 +582,7 @@ async def main():
     input_file = resolve_input_file(args.input_file, data_dir)
     dry_run = bool(args.dry_run)
     update_local = bool(args.update_local)
+    local_only = bool(args.local_only)
 
     # Resolve local file paths for --update-local
     all_transactions_path = args.all_transactions or (data_dir / "all_transactions.csv")
@@ -521,6 +598,24 @@ async def main():
     print(f"Loaded {len(rows)} rows from {input_file}")
     print(f"Loaded {len(category_map)} categories from {categories_file}")
     print(f"Loaded {len(tag_map)} tags from {tags_file}")
+    if local_only:
+        print("Local-only mode: skipping Monarch API calls.")
+        print(f"Will update : {all_transactions_path}")
+        print(f"             {unreviewed_path}")
+        print("\nUpdating local CSV files...")
+        local_update_completed = update_local_files(
+            rows,
+            category_map,
+            all_transactions_path,
+            unreviewed_path,
+        )
+        if local_update_completed:
+            print("  Local files updated.")
+        else:
+            print("  Local file update incomplete.")
+            print("  Close any open CSVs and run the same command again.")
+        return
+
     if not dry_run and update_local:
         print(f"Will update : {all_transactions_path}")
         print(f"             {unreviewed_path}")
@@ -597,16 +692,29 @@ async def main():
 
     # ── Update local files ───────────────────────────────────────────────────
     if update_local and successfully_pushed_rows:
-        print("\n🔄 Updating local CSV files...")
-        update_local_files(
+        print("\nUpdating local CSV files...")
+        local_update_completed = update_local_files(
             successfully_pushed_rows,
             category_map,
             all_transactions_path,
             unreviewed_path,
         )
-        print("  ✅ Local files updated.")
+        if local_update_completed:
+            print("  Local files updated.")
+        else:
+            print("  Local file update incomplete.")
+            print("  Close any open CSVs and rerun this local-only recovery command:")
+            print(
+                "  "
+                + local_recovery_command(
+                    data_dir,
+                    input_file,
+                    all_transactions_path,
+                    unreviewed_path,
+                )
+            )
     elif update_local and not successfully_pushed_rows:
-        print("\nℹ️  No successful pushes — local files not updated.")
+        print("\nNo successful pushes; local files not updated.")
 
 
 if __name__ == "__main__":
