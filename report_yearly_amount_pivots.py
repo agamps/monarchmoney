@@ -1,4 +1,6 @@
 import argparse
+import csv
+import re
 from pathlib import Path
 
 import pandas as pd
@@ -18,6 +20,16 @@ AMOUNT_FORMAT = "#,##0.00"
 TOTAL_LABEL = "Total"
 BLANK_LABEL = "(blank)"
 UNMAPPED_GROUP = "Unmapped"
+
+
+def optional_path(value: str | None) -> Path | None:
+    if value is None:
+        return None
+
+    text = value.strip()
+    if text == "" or text.casefold() in {"auto", "default", "none"}:
+        return None
+    return Path(text)
 
 
 def parse_args() -> argparse.Namespace:
@@ -41,6 +53,15 @@ def parse_args() -> argparse.Namespace:
         type=Path,
         default=DEFAULT_OUTPUT,
         help="Path for the generated Excel workbook.",
+    )
+    parser.add_argument(
+        "--years-file",
+        type=optional_path,
+        default=None,
+        help=(
+            "Optional CSV/text file listing year columns to include, in order. "
+            "A Year column or simple first-column/list format both work."
+        ),
     )
     return parser.parse_args()
 
@@ -152,6 +173,52 @@ def year_columns(df: pd.DataFrame) -> list[int]:
     return sorted(int(year) for year in df["Year"].dropna().unique())[::-1]
 
 
+def parse_year_name(value: object) -> int | None:
+    text = str(value or "").strip()
+    if text == "" or text.startswith("#"):
+        return None
+
+    match = re.search(r"\d{2,4}", text)
+    if match is None:
+        return None
+
+    year = int(match.group())
+    if year < 100:
+        year += 2000
+    return year
+
+
+def load_year_columns(path: Path) -> list[int]:
+    last_error: UnicodeDecodeError | None = None
+
+    for encoding in CSV_ENCODINGS:
+        try:
+            with path.open("r", encoding=encoding, newline="") as f:
+                cells = [cell for row in csv.reader(f) for cell in row]
+            break
+        except UnicodeDecodeError as e:
+            last_error = e
+    else:
+        assert last_error is not None
+        raise ValueError(
+            f"Could not decode {path} using supported encodings: "
+            f"{', '.join(CSV_ENCODINGS)}"
+        ) from last_error
+
+    years: list[int] = []
+    seen: set[int] = set()
+    for cell in cells:
+        year = parse_year_name(cell)
+        if year is not None and year not in seen:
+            years.append(year)
+            seen.add(year)
+
+    if not years:
+        raise ValueError(f"{path} does not contain any year names.")
+
+    return years
+
+
 def amount_pivot(
     df: pd.DataFrame,
     dimensions: list[str],
@@ -206,8 +273,7 @@ def tagged_transactions(df: pd.DataFrame) -> pd.DataFrame:
     return tagged
 
 
-def build_sheets(df: pd.DataFrame) -> dict[str, pd.DataFrame]:
-    years = year_columns(df)
+def build_sheets(df: pd.DataFrame, years: list[int]) -> dict[str, pd.DataFrame]:
     tagged_df = tagged_transactions(df)
 
     sheets = {
@@ -298,11 +364,18 @@ def main() -> None:
         args.transactions,
         category_to_group,
     )
-    sheets = build_sheets(prepared_df)
+    years = (
+        load_year_columns(args.years_file)
+        if args.years_file
+        else year_columns(prepared_df)
+    )
+    sheets = build_sheets(prepared_df, years)
 
     print(f"Read {len(prepared_df)} transaction rows from {args.transactions}")
     print(f"Loaded {len(category_to_group)} category-to-group mappings from {args.groups}")
-    print(f"Year columns: {', '.join(str(year) for year in year_columns(prepared_df))}")
+    if args.years_file:
+        print(f"Loaded year columns from {args.years_file}")
+    print(f"Year columns: {', '.join(str(year) for year in years)}")
     print(f"Workbook tabs: {', '.join(sheets)}")
     if not write_workbook(args.output, sheets):
         return

@@ -38,6 +38,12 @@
       "default": "data/yearly_amount_pivots.xlsx"
     },
     {
+      "id": "yearlyPivotYearsFile",
+      "type": "promptString",
+      "description": "CSV path listing yearly pivot columns, or auto",
+      "default": "auto"
+    },
+    {
       "id": "unreviewedPivotOutput",
       "type": "promptString",
       "description": "Output Excel path for the unreviewed pivot report",
@@ -84,22 +90,22 @@
       "default": "data/push.csv"
     },
     {
+      "id": "businessReportGroups",
+      "type": "promptString",
+      "description": "Comma-separated group search terms to include",
+      "default": "Immanent"
+    },
+    {
+      "id": "businessReportExcludeGroups",
+      "type": "promptString",
+      "description": "Optional comma-separated group search terms to exclude",
+      "default": ""
+    },
+    {
       "id": "businessReportYear",
       "type": "promptString",
       "description": "Fiscal year for the business report",
       "default": "2026"
-    },
-    {
-      "id": "businessReportBusiness",
-      "type": "promptString",
-      "description": "Business for the report (immanent or virtus)",
-      "default": "immanent"
-    },
-    {
-      "id": "businessReportOutput",
-      "type": "promptString",
-      "description": "Output Excel path for the business report",
-      "default": "data/immanent_business_report_2026.xlsx"
     }
   ],
   "configurations": [
@@ -289,6 +295,8 @@
       "args": [
         "--transactions",
         "${input:yearlyPivotSource}",
+        "--years-file",
+        "${input:yearlyPivotYearsFile}",
         "--output",
         "${input:yearlyPivotOutput}"
       ]
@@ -301,28 +309,12 @@
       "cwd": "${workspaceFolder}",
       "console": "integratedTerminal",
       "args": [
+        "--group-terms",
+        "${input:businessReportGroups}",
+        "--exclude-group-terms",
+        "${input:businessReportExcludeGroups}",
         "--fiscal-year",
-        "${input:businessReportYear}",
-        "--business",
-        "${input:businessReportBusiness}",
-        "--output",
-        "${input:businessReportOutput}"
-      ]
-    },
-    {
-      "name": "Reports - Business - Immanent 2026",
-      "type": "debugpy",
-      "request": "launch",
-      "program": "${workspaceFolder}/business_report.py",
-      "cwd": "${workspaceFolder}",
-      "console": "integratedTerminal",
-      "args": [
-        "--fiscal-year",
-        "2026",
-        "--business",
-        "immanent",
-        "--output",
-        "data/immanent_business_report_2026.xlsx"
+        "${input:businessReportYear}"
       ]
     },
     {
