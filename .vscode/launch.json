@@ -56,6 +56,36 @@
       "default": ""
     },
     {
+      "id": "recurringOptimizationSource",
+      "type": "promptString",
+      "description": "Source CSV path for recurring optimization",
+      "default": "data/all_transactions.csv"
+    },
+    {
+      "id": "recurringOptimizationOutput",
+      "type": "promptString",
+      "description": "Output Excel path for recurring optimization",
+      "default": "data/recurring_optimization.xlsx"
+    },
+    {
+      "id": "recurringOptimizationLookbackMonths",
+      "type": "promptString",
+      "description": "Months to inspect, capped at 36",
+      "default": "36"
+    },
+    {
+      "id": "recurringOptimizationRecentMonths",
+      "type": "promptString",
+      "description": "Recent months for recency-weighted scoring",
+      "default": "6"
+    },
+    {
+      "id": "recurringOptimizationExcludeGroups",
+      "type": "promptString",
+      "description": "Groups to exclude from recurring optimization, comma-separated",
+      "default": "transfers, investment group"
+    },
+    {
       "id": "unreviewedPivotOutput",
       "type": "promptString",
       "description": "Output Excel path for the unreviewed pivot report",
@@ -315,6 +345,26 @@
         "${input:yearlyPivotExcludeCategories}",
         "--output",
         "${input:yearlyPivotOutput}"
+      ]
+    },
+    {
+      "name": "Reports - Recurring Optimization",
+      "type": "debugpy",
+      "request": "launch",
+      "program": "${workspaceFolder}/report_recurring_optimization.py",
+      "cwd": "${workspaceFolder}",
+      "console": "integratedTerminal",
+      "args": [
+        "--transactions",
+        "${input:recurringOptimizationSource}",
+        "--lookback-months",
+        "${input:recurringOptimizationLookbackMonths}",
+        "--recent-months",
+        "${input:recurringOptimizationRecentMonths}",
+        "--exclude-groups",
+        "${input:recurringOptimizationExcludeGroups}",
+        "--output",
+        "${input:recurringOptimizationOutput}"
       ]
     },
     {
