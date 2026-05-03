@@ -108,6 +108,20 @@ def normalize_bool(value: Any) -> bool | None:
     raise ValueError(f"Cannot convert to bool: {value!r}")
 
 
+def parse_amount(value: Any) -> float | None:
+    text = clean_str(value)
+    if text is None:
+        return None
+
+    is_parenthesized = text.startswith("(") and text.endswith(")")
+    if is_parenthesized:
+        text = text[1:-1].strip()
+
+    text = text.replace(",", "").replace("$", "")
+    amount = float(text)
+    return -abs(amount) if is_parenthesized else amount
+
+
 def normalize_date(value: Any) -> str | None:
     text = clean_str(value)
     if not text:
@@ -316,8 +330,7 @@ def build_update_payload(
 
     amount_raw = row.get("Amount")
     if "Amount" in row:
-        amount = clean_str(amount_raw)
-        payload["amount"] = None if amount is None else float(amount.replace(",", ""))
+        payload["amount"] = parse_amount(amount_raw)
 
     date_raw = row.get("Date")
     if "Date" in row:
@@ -512,7 +525,9 @@ async def main():
         print(f"Will update : {all_transactions_path}")
         print(f"             {unreviewed_path}")
 
-    mm = await get_mm()
+    mm = None
+    if not dry_run:
+        mm = await get_mm()
 
     updated = 0
     skipped = 0
@@ -545,6 +560,7 @@ async def main():
             continue
 
         try:
+            assert mm is not None
             mm = await update_transaction_safe(mm, **payload)
 
             if reviewed is not None:

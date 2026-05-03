@@ -38,14 +38,37 @@
       "default": ""
     },
     {
-      "id": "filterUnreviewedKind",
+      "id": "filterKind",
       "type": "pickString",
-      "description": "Filter unreviewed transactions by accounts or merchants?",
+      "description": "Filter transactions by accounts, merchants, or categories?",
       "options": [
         "merchants",
-        "accounts"
+        "accounts",
+        "categories"
       ],
       "default": "merchants"
+    },
+    {
+      "id": "filterOutput",
+      "type": "promptString",
+      "description": "Output CSV path for filtered rows. Filenames like push3 become data/push3.csv",
+      "default": "data/push.csv"
+    },
+    {
+      "id": "filterWriteMode",
+      "type": "pickString",
+      "description": "Append to the output file or overwrite it?",
+      "options": [
+        "overwrite",
+        "append"
+      ],
+      "default": "overwrite"
+    },
+    {
+      "id": "pushInputFile",
+      "type": "promptString",
+      "description": "Push input CSV or JSON file",
+      "default": "data/push.csv"
     },
     {
       "id": "businessReportYear",
@@ -138,7 +161,27 @@
       "console": "integratedTerminal",
       "args": [
         "--filter-type",
-        "${input:filterUnreviewedKind}"
+        "${input:filterKind}",
+        "--output",
+        "${input:filterOutput}",
+        "--write-mode",
+        "${input:filterWriteMode}"
+      ]
+    },
+    {
+      "name": "Review - Filter All To Push",
+      "type": "debugpy",
+      "request": "launch",
+      "program": "${workspaceFolder}/filter_all_to_push.py",
+      "cwd": "${workspaceFolder}",
+      "console": "integratedTerminal",
+      "args": [
+        "--filter-type",
+        "${input:filterKind}",
+        "--output",
+        "${input:filterOutput}",
+        "--write-mode",
+        "${input:filterWriteMode}"
       ]
     },
     {
@@ -164,7 +207,7 @@
         "--data-dir",
         "data",
         "--input-file",
-        "data/push.csv",
+        "${input:pushInputFile}",
         "--dry-run",
         "true"
       ]
@@ -180,7 +223,7 @@
         "--data-dir",
         "data",
         "--input-file",
-        "data/push.csv",
+        "${input:pushInputFile}",
         "--dry-run",
         "false",
         "--update-local",

@@ -16,6 +16,9 @@ async def session_is_valid(mm: MonarchMoney) -> bool:
         if "401" in str(e):
             return False
         raise
+    except TimeoutError:
+        print("Timed out validating saved session.")
+        return False
 
 
 async def interactive_login_with_retry(max_attempts: int = 2) -> MonarchMoney:

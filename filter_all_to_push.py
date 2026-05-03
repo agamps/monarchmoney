@@ -1,11 +1,11 @@
 """
-Create push.csv from unreviewed transactions matching merchant/account/category filters.
+Create push.csv from all transactions matching merchant/account/category filters.
 
 Default inputs:
-    data/unreviewed_transactions.csv
-    data/filter-unrev-merchants.txt
-    data/filter-unrev-accounts.txt
-    data/filter-unrev-categories.txt
+    data/all_transactions.csv
+    data/filter-all-merchants.txt or data/filter-unrev-merchants.txt
+    data/filter-all-accounts.txt or data/filter-unrev-accounts.txt
+    data/filter-all-categories.txt or data/filter-unrev-categories.txt
 
 Each filter file is one search term per line. Blank lines and lines starting
 with # are ignored. Matching is case-insensitive substring matching by default.
@@ -16,17 +16,26 @@ import csv
 from pathlib import Path
 
 CSV_ENCODINGS = ("utf-8-sig", "utf-8", "cp1252", "latin-1")
-DEFAULT_UNREVIEWED = Path("data/unreviewed_transactions.csv")
+DEFAULT_TRANSACTIONS = Path("data/all_transactions.csv")
 DEFAULT_OUTPUT = Path("data/push.csv")
-DEFAULT_MERCHANT_FILTER = Path("data/filter-unrev-merchants.txt")
-DEFAULT_ACCOUNT_FILTER = Path("data/filter-unrev-accounts.txt")
-DEFAULT_CATEGORY_FILTER = Path("data/filter-unrev-categories.txt")
+DEFAULT_MERCHANT_FILTERS = (
+    Path("data/filter-all-merchants.txt"),
+    Path("data/filter-unrev-merchants.txt"),
+)
+DEFAULT_ACCOUNT_FILTERS = (
+    Path("data/filter-all-accounts.txt"),
+    Path("data/filter-unrev-accounts.txt"),
+)
+DEFAULT_CATEGORY_FILTERS = (
+    Path("data/filter-all-categories.txt"),
+    Path("data/filter-unrev-categories.txt"),
+)
 
 
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(
         description=(
-            "Filter unreviewed transactions by merchant/account/category lists and write "
+            "Filter all transactions by merchant/account/category lists and write "
             "matching rows to push.csv."
         )
     )
@@ -37,10 +46,10 @@ def parse_args() -> argparse.Namespace:
         help="Which default filter file to use.",
     )
     parser.add_argument(
-        "--unreviewed",
+        "--transactions",
         type=Path,
-        default=DEFAULT_UNREVIEWED,
-        help="Source unreviewed transactions CSV.",
+        default=DEFAULT_TRANSACTIONS,
+        help="Source all transactions CSV.",
     )
     parser.add_argument(
         "--output",
@@ -58,19 +67,28 @@ def parse_args() -> argparse.Namespace:
         "--merchant-filter",
         type=Path,
         default=None,
-        help="Merchant filter file. Defaults to data/filter-unrev-merchants.txt if present.",
+        help=(
+            "Merchant filter file. Defaults to data/filter-all-merchants.txt, "
+            "then data/filter-unrev-merchants.txt."
+        ),
     )
     parser.add_argument(
         "--account-filter",
         type=Path,
         default=None,
-        help="Account filter file. Defaults to data/filter-unrev-accounts.txt if present.",
+        help=(
+            "Account filter file. Defaults to data/filter-all-accounts.txt, "
+            "then data/filter-unrev-accounts.txt."
+        ),
     )
     parser.add_argument(
         "--category-filter",
         type=Path,
         default=None,
-        help="Category filter file. Defaults to data/filter-unrev-categories.txt if present.",
+        help=(
+            "Category filter file. Defaults to data/filter-all-categories.txt, "
+            "then data/filter-unrev-categories.txt."
+        ),
     )
     parser.add_argument(
         "--exact",
@@ -97,7 +115,7 @@ def normalize(value: str, *, case_sensitive: bool) -> str:
 
 def resolve_filter_file(
     explicit_path: Path | None,
-    default_path: Path,
+    default_paths: tuple[Path, ...],
     label: str,
 ) -> Path | None:
     if explicit_path is not None:
@@ -105,7 +123,11 @@ def resolve_filter_file(
             raise FileNotFoundError(f"{label} filter file not found: {explicit_path}")
         return explicit_path
 
-    return default_path if default_path.exists() else None
+    for path in default_paths:
+        if path.exists():
+            return path
+
+    return None
 
 
 def resolve_output_path(path: Path) -> Path:
@@ -266,13 +288,13 @@ def main() -> None:
     output_path = resolve_output_path(args.output)
 
     merchant_filter_file = resolve_filter_file(
-        args.merchant_filter, DEFAULT_MERCHANT_FILTER, "Merchant"
+        args.merchant_filter, DEFAULT_MERCHANT_FILTERS, "Merchant"
     )
     account_filter_file = resolve_filter_file(
-        args.account_filter, DEFAULT_ACCOUNT_FILTER, "Account"
+        args.account_filter, DEFAULT_ACCOUNT_FILTERS, "Account"
     )
     category_filter_file = resolve_filter_file(
-        args.category_filter, DEFAULT_CATEGORY_FILTER, "Category"
+        args.category_filter, DEFAULT_CATEGORY_FILTERS, "Category"
     )
     if args.filter_type == "accounts":
         merchant_filter_file = None
@@ -292,39 +314,40 @@ def main() -> None:
 
     if not merchant_terms and not account_terms and not category_terms:
         if args.filter_type == "accounts":
-            expected = str(DEFAULT_ACCOUNT_FILTER)
+            expected = " or ".join(str(path) for path in DEFAULT_ACCOUNT_FILTERS)
         elif args.filter_type == "merchants":
-            expected = str(DEFAULT_MERCHANT_FILTER)
+            expected = " or ".join(str(path) for path in DEFAULT_MERCHANT_FILTERS)
         elif args.filter_type == "categories":
-            expected = str(DEFAULT_CATEGORY_FILTER)
+            expected = " or ".join(str(path) for path in DEFAULT_CATEGORY_FILTERS)
         else:
             expected = (
-                f"{DEFAULT_MERCHANT_FILTER}, {DEFAULT_ACCOUNT_FILTER}, "
-                f"or {DEFAULT_CATEGORY_FILTER}"
+                f"{', '.join(str(path) for path in DEFAULT_MERCHANT_FILTERS)}, "
+                f"{', '.join(str(path) for path in DEFAULT_ACCOUNT_FILTERS)}, "
+                f"or {', '.join(str(path) for path in DEFAULT_CATEGORY_FILTERS)}"
             )
         raise ValueError(f"No filter terms found. Create {expected}.")
 
-    source_fieldnames, unreviewed_rows = load_csv(args.unreviewed)
+    source_fieldnames, transaction_rows = load_csv(args.transactions)
     id_column = find_column(source_fieldnames, ("Transaction ID", "id", "transaction_id"))
     merchant_column = find_column(source_fieldnames, ("Merchant", "merchant_name"))
     account_column = find_column(source_fieldnames, ("Account", "account_name"))
     category_column = find_column(source_fieldnames, ("Category", "category_name"))
 
     if id_column is None:
-        raise ValueError(f"{args.unreviewed} does not have a transaction ID column.")
+        raise ValueError(f"{args.transactions} does not have a transaction ID column.")
     if merchant_terms and merchant_column is None:
-        raise ValueError(f"{args.unreviewed} does not have a Merchant column.")
+        raise ValueError(f"{args.transactions} does not have a Merchant column.")
     if account_terms and account_column is None:
-        raise ValueError(f"{args.unreviewed} does not have an Account column.")
+        raise ValueError(f"{args.transactions} does not have an Account column.")
     if category_terms and category_column is None:
-        raise ValueError(f"{args.unreviewed} does not have a Category column.")
+        raise ValueError(f"{args.transactions} does not have a Category column.")
 
     matched_rows: list[dict[str, str]] = []
     selected_ids: set[str] = set()
     if args.write_mode == "append":
         selected_ids.update(existing_output_ids(output_path))
 
-    for row in unreviewed_rows:
+    for row in transaction_rows:
         transaction_id = str(row.get(id_column, "")).strip()
         if not transaction_id or transaction_id in selected_ids:
             continue
@@ -364,7 +387,7 @@ def main() -> None:
             selected_ids.add(transaction_id)
             matched_rows.append(row)
 
-    print(f"Unreviewed rows scanned: {len(unreviewed_rows)}")
+    print(f"Transaction rows scanned: {len(transaction_rows)}")
     print(f"Merchant filters: {len(merchant_terms)}")
     print(f"Account filters: {len(account_terms)}")
     print(f"Category filters: {len(category_terms)}")

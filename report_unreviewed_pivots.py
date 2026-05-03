@@ -12,9 +12,9 @@ DEFAULT_OUTPUT = Path("data/unreviewed_pivots.xlsx")
 
 HEADER_FILL = PatternFill(fill_type="solid", fgColor="1F4E78")
 HEADER_FONT = Font(name="Consolas", bold=True, color="FFFFFF")
-BODY_FONT = Font(name="Consolas")
 AMOUNT_FORMAT = "#,##0.00"
 DATE_FORMAT = "mm/dd/yyyy"
+TOTAL_LABEL = "Total"
 
 
 def parse_args() -> argparse.Namespace:
@@ -57,6 +57,24 @@ def require_columns(df: pd.DataFrame, path: Path, columns: list[str]) -> None:
         raise ValueError(f"{path} is missing required columns: {', '.join(missing)}")
 
 
+def parse_amount(value: object) -> float:
+    text = str(value or "").strip()
+    if text == "":
+        return 0.0
+
+    is_parenthesized = text.startswith("(") and text.endswith(")")
+    if is_parenthesized:
+        text = text[1:-1].strip()
+
+    text = text.replace(",", "").replace("$", "")
+    amount = pd.to_numeric(text, errors="coerce")
+    if pd.isna(amount):
+        return 0.0
+
+    amount = float(amount)
+    return -abs(amount) if is_parenthesized else amount
+
+
 def prepare_transactions(df: pd.DataFrame, path: Path) -> pd.DataFrame:
     require_columns(
         df,
@@ -65,10 +83,7 @@ def prepare_transactions(df: pd.DataFrame, path: Path) -> pd.DataFrame:
     )
 
     prepared = df.copy()
-    prepared["Amount"] = pd.to_numeric(
-        prepared["Amount"].astype(str).str.replace(",", "", regex=False),
-        errors="coerce",
-    ).fillna(0.0)
+    prepared["Amount"] = prepared["Amount"].map(parse_amount)
     prepared["Total Abs Amount"] = prepared["Amount"].abs()
 
     if "Date" in prepared.columns:
@@ -108,6 +123,28 @@ def summary_by(df: pd.DataFrame, dimension: str) -> pd.DataFrame:
         ascending=[False, False, True],
         kind="stable",
     )
+
+
+def append_total_row(df: pd.DataFrame) -> pd.DataFrame:
+    if df.empty:
+        return df
+
+    first_column = str(df.columns[0])
+    if str(df.iloc[-1][first_column]) == TOTAL_LABEL:
+        return df
+
+    total_row = {column: "" for column in df.columns}
+    total_row[first_column] = TOTAL_LABEL
+
+    for column in df.columns:
+        if column == first_column:
+            continue
+        if pd.api.types.is_numeric_dtype(df[column]) and not pd.api.types.is_bool_dtype(
+            df[column]
+        ):
+            total_row[column] = df[column].sum()
+
+    return pd.concat([df, pd.DataFrame([total_row])], ignore_index=True)
 
 
 def summary_by_pair(df: pd.DataFrame, first: str, second: str) -> pd.DataFrame:
@@ -200,8 +237,9 @@ def format_workbook(writer: pd.ExcelWriter) -> None:
             cell.fill = HEADER_FILL
 
         for row in ws.iter_rows(min_row=2):
+            is_total_row = str(row[0].value or "").strip() == TOTAL_LABEL
             for cell in row:
-                cell.font = BODY_FONT
+                cell.font = Font(name="Consolas", bold=is_total_row)
                 header_name = headers.get(cell.column, "")
                 if "Amount" in header_name:
                     cell.number_format = AMOUNT_FORMAT
@@ -220,14 +258,14 @@ def write_report(output_path: Path, df: pd.DataFrame) -> None:
     output_path.parent.mkdir(parents=True, exist_ok=True)
 
     sheets = {
-        "Merchant Summary": summary_by(df, "Merchant"),
-        "Account Summary": summary_by(df, "Account"),
-        "Category Summary": summary_by(df, "Category"),
-        "Merchant Account": summary_by_pair(df, "Merchant", "Account"),
-        "Account Category": summary_by_pair(df, "Account", "Category"),
+        "Merchant Summary": append_total_row(summary_by(df, "Merchant")),
+        "Account Summary": append_total_row(summary_by(df, "Account")),
+        "Category Summary": append_total_row(summary_by(df, "Category")),
+        "Merchant Account": append_total_row(summary_by_pair(df, "Merchant", "Account")),
+        "Account Category": append_total_row(summary_by_pair(df, "Account", "Category")),
         "Merchant Acct Pivot": count_matrix(df, "Merchant", "Account"),
         "Account Cat Pivot": count_matrix(df, "Account", "Category"),
-        "Raw Unreviewed": raw_unreviewed(df),
+        "Raw Unreviewed": append_total_row(raw_unreviewed(df)),
     }
 
     with pd.ExcelWriter(output_path, engine="openpyxl") as writer:
