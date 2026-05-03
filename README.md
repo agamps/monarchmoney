@@ -316,10 +316,12 @@ Create yearly amount pivot workbooks:
 python report_yearly_amount_pivots.py --transactions data/all_transactions.csv --groups data/category_groups.csv --years 2026,2025,2024 --output data/yearly_amount_pivots.xlsx
 ```
 
-Create a recurring spend and income optimization workbook:
+Create a recurring expense optimization workbook. Use either a flat group file
+or a flat category-term file:
 
 ```bash
-python report_recurring_optimization.py --transactions data/all_transactions.csv --groups data/category_groups.csv --exclude-groups "transfers, investment group" --output data/recurring_optimization.xlsx
+python report_recurring_optimization.py --transactions data/all_transactions.csv --groups data/category_groups.csv --optimizable-type groups --optimizable-groups data/optimizable_groups.txt --output data/recurring_optimization.xlsx
+python report_recurring_optimization.py --transactions data/all_transactions.csv --groups data/category_groups.csv --optimizable-type categories --optimizable-categories data/optimizable_categories.txt --output data/recurring_optimization.xlsx
 ```
 
 Create a focused Excel report for selected category groups and a fiscal year:
@@ -346,7 +348,7 @@ python business_report.py --group-terms "Business, Travel" --exclude-group-terms
 | `report_group_net_by_year.py` | Generates a CSV report of net income/expense totals by category group for each year. | `python report_group_net_by_year.py --include-unmapped` |
 | `report_unreviewed_pivots.py` | Generates an Excel workbook with summaries and pivot-style views for unreviewed transactions by merchant, account, and category. | `python report_unreviewed_pivots.py --output data/unreviewed_pivots.xlsx` |
 | `report_yearly_amount_pivots.py` | Generates an Excel workbook of yearly amount pivots by group, category, merchant, account, and tag; supports explicit years and exclusions. | `python report_yearly_amount_pivots.py --exclude-groups "Transfers" --exclude-categories "Internal"` |
-| `report_recurring_optimization.py` | Generates an Excel workbook that finds recurring merchant-level expenses and income streams, scores recency/cadence/amount stability, excludes transfer/investment groups by default, and estimates savings or income optimization opportunities. | `python report_recurring_optimization.py --lookback-months 36 --recent-months 6 --exclude-groups "transfers, investment group"` |
+| `report_recurring_optimization.py` | Generates an expense-only Excel workbook that finds recurring spend in selected category groups or wildcard-matched category names, scores cadence, recency, frequency, variability, category focus, price movement, and optimization type, then estimates potential savings. | `python report_recurring_optimization.py --optimizable-type categories --optimizable-categories data/optimizable_categories.txt` |
 | `business_report.py` | Generates a focused Excel workbook for selected category groups and fiscal year; includes group, category, merchant, account, tag, and transaction-detail tabs. | `python business_report.py --group-terms "Business, Travel" --fiscal-year 2026` |
 | `.gitignore` | Keeps local sessions, generated data, virtual environments, caches, and other machine-local files out of the public repo. | Run `git status --short` before committing. |
 | `.vscode/launch.json` | VS Code debug configurations for login, pull, review, push, and report scripts; prompts for common runtime arguments. | Use the VS Code Run and Debug panel. |
@@ -365,7 +367,9 @@ python business_report.py --group-terms "Business, Travel" --exclude-group-terms
 | `data/tags.json` | `pull_cats_tags.py` | Tag name-to-ID map used by `push.py`. |
 | `data/category_groups.csv` | `pull_category_groups.py` | Category-to-group map used by group filters and reports. |
 | `data/push.csv` | filter/copy scripts or manual editing | Rows to dry-run or push back to Monarch. |
-| `data/recurring_optimization.xlsx` | `report_recurring_optimization.py` | Workbook of recurring spend and income optimization candidates. |
+| `data/optimizable_groups.txt` | user-created | One category group name per line for `report_recurring_optimization.py` expense analysis. |
+| `data/optimizable_categories.txt` | user-created | One category search term per line for wildcard category matching in `report_recurring_optimization.py`. |
+| `data/recurring_optimization.xlsx` | `report_recurring_optimization.py` | Workbook of recurring expense optimization candidates. |
 | `data/filter-unrev-merchants.txt` | user-created | Merchant terms for unreviewed filtering. |
 | `data/filter-unrev-accounts.txt` | user-created | Account terms for unreviewed filtering. |
 | `data/filter-unrev-categories.txt` | user-created | Category terms for unreviewed filtering. |
@@ -380,6 +384,13 @@ python business_report.py --group-terms "Business, Travel" --exclude-group-terms
 
 - Filter files use one term per line. Blank lines and lines starting with `#`
   are ignored.
+- `data/optimizable_groups.txt` uses one group name per line. Group names are
+  matched case-insensitively against `data/category_groups.csv`.
+- `data/optimizable_categories.txt` uses one category search term per line.
+  Terms match category names case-insensitively as substrings, and `*` or `?`
+  can be used for wildcard patterns. For example, `high interest` matches the
+  High Interest category, and `insurance` matches insurance categories across
+  groups.
 - Filters use case-insensitive substring matching by default. Add `--exact` for
   exact matches and `--case-sensitive` for case-sensitive matching.
 - `push.py` defaults to dry-run mode through `MONARCH_DRY_RUN=true`. Pass
@@ -388,6 +399,6 @@ python business_report.py --group-terms "Business, Travel" --exclude-group-terms
   filter scripts.
 - Close CSV or Excel files before running scripts that write to them. Several
   scripts detect locked files and print a recovery command or warning.
-- `report_recurring_optimization.py` defaults to negative amounts as expenses
-  and positive amounts as income. Use `--expense-sign positive` only for exports
-  with the opposite sign convention.
+- `report_recurring_optimization.py` is expense-only. It defaults to negative
+  amounts as expenses; use `--expense-sign positive` only for exports with the
+  opposite sign convention.

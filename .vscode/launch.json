@@ -80,10 +80,14 @@
       "default": "6"
     },
     {
-      "id": "recurringOptimizationExcludeGroups",
-      "type": "promptString",
-      "description": "Groups to exclude from recurring optimization, comma-separated",
-      "default": "transfers, investment group"
+      "id": "recurringOptimizationOptimizableType",
+      "type": "pickString",
+      "description": "Analyze selected category groups or wildcard category terms?",
+      "options": [
+        "groups",
+        "categories"
+      ],
+      "default": "groups"
     },
     {
       "id": "unreviewedPivotOutput",
@@ -361,8 +365,8 @@
         "${input:recurringOptimizationLookbackMonths}",
         "--recent-months",
         "${input:recurringOptimizationRecentMonths}",
-        "--exclude-groups",
-        "${input:recurringOptimizationExcludeGroups}",
+        "--optimizable-type",
+        "${input:recurringOptimizationOptimizableType}",
         "--output",
         "${input:recurringOptimizationOutput}"
       ]
