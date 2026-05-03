@@ -274,7 +274,7 @@
       ]
     },
     {
-      "name": "Reports - Group Net By Year",
+      "name": "Reports - Group Net By Year CSV (Legacy)",
       "type": "debugpy",
       "request": "launch",
       "program": "${workspaceFolder}/report_group_net_by_year.py",
