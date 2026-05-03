@@ -38,10 +38,22 @@
       "default": "data/yearly_amount_pivots.xlsx"
     },
     {
-      "id": "yearlyPivotYearsFile",
+      "id": "yearlyPivotYears",
       "type": "promptString",
-      "description": "CSV path listing yearly pivot columns, or auto",
+      "description": "Year columns: auto or comma-separated years",
       "default": "auto"
+    },
+    {
+      "id": "yearlyPivotExcludeGroups",
+      "type": "promptString",
+      "description": "Groups to exclude from yearly pivots, comma-separated",
+      "default": ""
+    },
+    {
+      "id": "yearlyPivotExcludeCategories",
+      "type": "promptString",
+      "description": "Categories to exclude from yearly pivots, comma-separated",
+      "default": ""
     },
     {
       "id": "unreviewedPivotOutput",
@@ -295,8 +307,12 @@
       "args": [
         "--transactions",
         "${input:yearlyPivotSource}",
-        "--years-file",
-        "${input:yearlyPivotYearsFile}",
+        "--years",
+        "${input:yearlyPivotYears}",
+        "--exclude-groups",
+        "${input:yearlyPivotExcludeGroups}",
+        "--exclude-categories",
+        "${input:yearlyPivotExcludeCategories}",
         "--output",
         "${input:yearlyPivotOutput}"
       ]

@@ -1,5 +1,4 @@
 import argparse
-import csv
 import re
 from pathlib import Path
 
@@ -22,14 +21,14 @@ BLANK_LABEL = "(blank)"
 UNMAPPED_GROUP = "Unmapped"
 
 
-def optional_path(value: str | None) -> Path | None:
+def optional_years_input(value: str | None) -> str | None:
     if value is None:
         return None
 
     text = value.strip()
     if text == "" or text.casefold() in {"auto", "default", "none"}:
         return None
-    return Path(text)
+    return text
 
 
 def parse_args() -> argparse.Namespace:
@@ -55,13 +54,24 @@ def parse_args() -> argparse.Namespace:
         help="Path for the generated Excel workbook.",
     )
     parser.add_argument(
-        "--years-file",
-        type=optional_path,
+        "--years",
+        type=optional_years_input,
         default=None,
-        help=(
-            "Optional CSV/text file listing year columns to include, in order. "
-            "A Year column or simple first-column/list format both work."
-        ),
+        help="Optional comma-separated list of year columns to include, in order.",
+    )
+    parser.add_argument(
+        "--exclude-groups",
+        nargs="?",
+        const="",
+        default="",
+        help="Optional comma-separated group name terms to exclude.",
+    )
+    parser.add_argument(
+        "--exclude-categories",
+        nargs="?",
+        const="",
+        default="",
+        help="Optional comma-separated category name terms to exclude.",
     )
     return parser.parse_args()
 
@@ -173,50 +183,66 @@ def year_columns(df: pd.DataFrame) -> list[int]:
     return sorted(int(year) for year in df["Year"].dropna().unique())[::-1]
 
 
-def parse_year_name(value: object) -> int | None:
-    text = str(value or "").strip()
-    if text == "" or text.startswith("#"):
-        return None
+def split_terms(value: str | None) -> list[str]:
+    if value is None:
+        return []
 
-    match = re.search(r"\d{2,4}", text)
-    if match is None:
-        return None
-
-    year = int(match.group())
-    if year < 100:
-        year += 2000
-    return year
+    terms = [part.strip() for part in re.split(r"[,;\n]", value) if part.strip()]
+    return [term for term in terms if term.casefold() not in {"none", "default"}]
 
 
-def load_year_columns(path: Path) -> list[int]:
-    last_error: UnicodeDecodeError | None = None
+def term_mask(values: pd.Series, terms: list[str]) -> pd.Series:
+    if not terms:
+        return pd.Series(False, index=values.index)
 
-    for encoding in CSV_ENCODINGS:
-        try:
-            with path.open("r", encoding=encoding, newline="") as f:
-                cells = [cell for row in csv.reader(f) for cell in row]
-            break
-        except UnicodeDecodeError as e:
-            last_error = e
-    else:
-        assert last_error is not None
-        raise ValueError(
-            f"Could not decode {path} using supported encodings: "
-            f"{', '.join(CSV_ENCODINGS)}"
-        ) from last_error
+    normalized = values.fillna("").astype(str).str.casefold()
+    mask = pd.Series(False, index=values.index)
+    for term in terms:
+        mask = mask | normalized.str.contains(re.escape(term.casefold()), na=False)
+    return mask
 
+
+def apply_exclusions(
+    df: pd.DataFrame,
+    exclude_groups: list[str],
+    exclude_categories: list[str],
+) -> tuple[pd.DataFrame, int]:
+    excluded_mask = term_mask(df["Group"], exclude_groups) | term_mask(
+        df["Category"],
+        exclude_categories,
+    )
+    return df.loc[~excluded_mask].copy(), int(excluded_mask.sum())
+
+
+def parse_year_names(values: list[object], source: str) -> list[int]:
     years: list[int] = []
     seen: set[int] = set()
-    for cell in cells:
-        year = parse_year_name(cell)
-        if year is not None and year not in seen:
-            years.append(year)
-            seen.add(year)
+    for value in values:
+        text = str(value or "").strip()
+        if text == "" or text.startswith("#"):
+            continue
+
+        for match in re.findall(r"\d{2,4}", text):
+            year = int(match)
+            if year < 100:
+                year += 2000
+            if year not in seen:
+                years.append(year)
+                seen.add(year)
 
     if not years:
-        raise ValueError(f"{path} does not contain any year names.")
+        raise ValueError(f"{source} does not contain any year names.")
 
     return years
+
+
+def parse_year_columns_from_input(
+    years_input: str | None,
+) -> tuple[list[int] | None, str | None]:
+    if years_input is None:
+        return None, None
+
+    return parse_year_names([years_input], "year list input"), "year list input"
 
 
 def amount_pivot(
@@ -364,17 +390,29 @@ def main() -> None:
         args.transactions,
         category_to_group,
     )
-    years = (
-        load_year_columns(args.years_file)
-        if args.years_file
-        else year_columns(prepared_df)
+    prepared_count = len(prepared_df)
+    exclude_groups = split_terms(args.exclude_groups)
+    exclude_categories = split_terms(args.exclude_categories)
+    prepared_df, excluded_count = apply_exclusions(
+        prepared_df,
+        exclude_groups,
+        exclude_categories,
     )
+    configured_years, years_source = parse_year_columns_from_input(args.years)
+    years = configured_years or year_columns(prepared_df)
     sheets = build_sheets(prepared_df, years)
 
-    print(f"Read {len(prepared_df)} transaction rows from {args.transactions}")
+    print(f"Read {prepared_count} transaction rows from {args.transactions}")
     print(f"Loaded {len(category_to_group)} category-to-group mappings from {args.groups}")
-    if args.years_file:
-        print(f"Loaded year columns from {args.years_file}")
+    if exclude_groups:
+        print(f"Excluded group terms: {', '.join(exclude_groups)}")
+    if exclude_categories:
+        print(f"Excluded category terms: {', '.join(exclude_categories)}")
+    if exclude_groups or exclude_categories:
+        print(f"Excluded transaction rows: {excluded_count}")
+        print(f"Rows included after exclusions: {len(prepared_df)}")
+    if years_source:
+        print(f"Loaded year columns from {years_source}")
     print(f"Year columns: {', '.join(str(year) for year in years)}")
     print(f"Workbook tabs: {', '.join(sheets)}")
     if not write_workbook(args.output, sheets):
