@@ -83,6 +83,7 @@ python login.py
 python pull_transactions_persist_batches.py --data-dir data
 python pull_cats_tags.py --data-dir data
 python pull_category_groups.py --output data/category_groups.csv
+python pull_account_groups.py --output data/account_groups.csv
 ```
 
 5. Create a review/push file, edit it, dry-run the push, then push for real.
@@ -192,6 +193,12 @@ Export category-to-group mappings for group filters and reports:
 
 ```bash
 python pull_category_groups.py --output data/category_groups.csv
+```
+
+Export account-to-type/group mappings for account grouping reports:
+
+```bash
+python pull_account_groups.py --output data/account_groups.csv
 ```
 
 ### 3. Build A Push File
@@ -338,6 +345,7 @@ python business_report.py --group-terms "Business, Travel" --exclude-group-terms
 | `pull_transactions_persist_batches.py` | Pulls all transactions in batches; writes full JSON/CSV exports; writes unreviewed JSON/CSV exports; retries timeouts and refreshes auth on 401 responses. | `python pull_transactions_persist_batches.py --data-dir data` |
 | `pull_cats_tags.py` | Exports Monarch category and tag name-to-ID mappings as JSON and CSV; required before using friendly names in `push.py`. | `python pull_cats_tags.py --data-dir data` |
 | `pull_category_groups.py` | Exports category names, category IDs, group names, and group IDs; useful for group filters and reports. | `python pull_category_groups.py --output data/category_groups.csv` |
+| `pull_account_groups.py` | Exports account names, account IDs, account type/subtype, account group, balances, and visibility flags; useful for cash, loan, investment, and net-worth grouping. | `python pull_account_groups.py --output data/account_groups.csv` |
 | `get_unreviewed.py` | Pulls only transactions that need review; writes unreviewed JSON/CSV; upserts fetched rows into `all_transactions.csv`. | `python get_unreviewed.py --data-dir data --filename unreviewed_transactions` |
 | `filter_unreviewed_to_push.py` | Reads `unreviewed_transactions.csv`; filters by merchant, account, category, or group filter files; writes `push.csv`; supports append, exact matching, case sensitivity, and dry runs. | `python filter_unreviewed_to_push.py --filter-type groups --output push_groups` |
 | `filter_all_to_push.py` | Same style as the unreviewed filter, but scans `all_transactions.csv`; useful for historical cleanup or bulk edits beyond unreviewed rows. | `python filter_all_to_push.py --filter-type categories --exact --output data/push.csv` |
@@ -366,6 +374,7 @@ python business_report.py --group-terms "Business, Travel" --exclude-group-terms
 | `data/categories.json` | `pull_cats_tags.py` | Category name-to-ID map used by `push.py`. |
 | `data/tags.json` | `pull_cats_tags.py` | Tag name-to-ID map used by `push.py`. |
 | `data/category_groups.csv` | `pull_category_groups.py` | Category-to-group map used by group filters and reports. |
+| `data/account_groups.csv` | `pull_account_groups.py` | Account-to-type/group map for cash, loan, investment, and net-worth grouping. |
 | `data/push.csv` | filter/copy scripts or manual editing | Rows to dry-run or push back to Monarch. |
 | `data/optimizable_groups.txt` | user-created | One category group name per line for `report_recurring_optimization.py` expense analysis. |
 | `data/optimizable_categories.txt` | user-created | One category search term per line for wildcard category matching in `report_recurring_optimization.py`. |
