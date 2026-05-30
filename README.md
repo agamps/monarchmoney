@@ -137,6 +137,7 @@ On macOS or Linux, select `.venv/bin/python`.
 - `Pull - Transactions and Unreviewed`
 - `Pull - Categories and Tags`
 - `Pull - Category Groups`
+- `Pull - Account Groups`
 - `Review - Filter Unreviewed To Push`
 - `Push - Dry Run`
 - `Push - Live + Update Local`

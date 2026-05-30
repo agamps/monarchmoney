@@ -20,6 +20,12 @@
       "default": "data/category_groups.csv"
     },
     {
+      "id": "accountGroupsOutput",
+      "type": "promptString",
+      "description": "Output CSV path for account group export",
+      "default": "data/account_groups.csv"
+    },
+    {
       "id": "groupNetReportOutput",
       "type": "promptString",
       "description": "Output CSV path for group net-by-year report",
@@ -181,6 +187,18 @@
       "args": [
         "--output",
         "${input:categoryGroupsOutput}"
+      ]
+    },
+    {
+      "name": "Pull - Account Groups",
+      "type": "debugpy",
+      "request": "launch",
+      "program": "${workspaceFolder}/pull_account_groups.py",
+      "cwd": "${workspaceFolder}",
+      "console": "integratedTerminal",
+      "args": [
+        "--output",
+        "${input:accountGroupsOutput}"
       ]
     },
     {
