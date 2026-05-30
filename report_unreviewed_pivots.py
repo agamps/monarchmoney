@@ -269,8 +269,10 @@ def write_report(output_path: Path, df: pd.DataFrame) -> bool:
         "Account Summary": append_total_row(summary_by(df, "Account")),
         "Category Summary": append_total_row(summary_by(df, "Category")),
         "Merchant Account": append_total_row(summary_by_pair(df, "Merchant", "Account")),
+        "Account Merchant": append_total_row(summary_by_pair(df, "Account", "Merchant")),
         "Account Category": append_total_row(summary_by_pair(df, "Account", "Category")),
         "Merchant Acct Pivot": count_matrix(df, "Merchant", "Account"),
+        "Account Merch Pivot": count_matrix(df, "Account", "Merchant"),
         "Account Cat Pivot": count_matrix(df, "Account", "Category"),
         "Raw Unreviewed": append_total_row(raw_unreviewed(df)),
     }
