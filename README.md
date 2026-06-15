@@ -138,13 +138,18 @@ On macOS or Linux, select `.venv/bin/python`.
 - `Pull - Categories and Tags`
 - `Pull - Category Groups`
 - `Pull - Account Groups`
-- `Review - Filter Unreviewed To Push`
+- `Review - Filter Unreviewed Merchants To Push`
+- `Review - Filter Unreviewed Accounts To Push`
+- `Review - Filter Unreviewed Categories To Push`
+- `Review - Filter Unreviewed Groups To Push`
+- `Review - Filter Unreviewed Merchant/Account To Push`
+- `Review - Filter Unreviewed All To Push`
 - `Push - Dry Run`
 - `Push - Live + Update Local`
 - `Reports - Yearly Amount Pivots`
+- `Reports - Tag Activity`
 - `Reports - Recurring Optimization`
 - `Reports - Business`
-
 Several launch profiles prompt for paths, output files, years, filter type, or
 push input. Generated data still goes under ignored data directories, so keep an
 eye on `git status --short` before publishing changes.
@@ -196,7 +201,7 @@ Export category-to-group mappings for group filters and reports:
 python pull_category_groups.py --output data/category_groups.csv
 ```
 
-Export account-to-type/group mappings for account grouping reports:
+Export account-to-type/subtype mappings for account grouping reports:
 
 ```bash
 python pull_account_groups.py --output data/account_groups.csv
@@ -244,6 +249,12 @@ Create `data/push.csv` from unreviewed rows matching any available filter:
 
 ```bash
 python filter_unreviewed_to_push.py --filter-type all
+```
+
+Use alternate filter files when you want a one-off run:
+
+```bash
+python filter_unreviewed_to_push.py --filter-type merchants --merchant-filter data/my-merchants.txt --output data/push.csv
 ```
 
 Create `data/push.csv` from all transactions instead of only unreviewed rows:
@@ -315,13 +326,19 @@ python report_group_net_by_year.py --transactions data/all_transactions.csv --gr
 Create an Excel workbook summarizing unreviewed transactions:
 
 ```bash
-python report_unreviewed_pivots.py --transactions data/unreviewed_transactions.csv --output data/unreviewed_pivots.xlsx
+python report_unreviewed_pivots.py --transactions data/unreviewed_transactions.csv --account-groups data/account_groups.csv --output data/unreviewed_pivots.xlsx
 ```
 
 Create yearly amount pivot workbooks:
 
 ```bash
 python report_yearly_amount_pivots.py --transactions data/all_transactions.csv --groups data/category_groups.csv --years 2026,2025,2024 --output data/yearly_amount_pivots.xlsx
+```
+
+Create a tag activity workbook for the last three calendar years in the export:
+
+```bash
+python report_tag_activity.py --transactions data/all_transactions.csv --output data/tag_activity.xlsx
 ```
 
 Create a recurring expense optimization workbook. Use either a flat group file
@@ -348,15 +365,16 @@ python business_report.py --group-terms "Business, Travel" --exclude-group-terms
 | `pull_category_groups.py` | Exports category names, category IDs, group names, and group IDs; useful for group filters and reports. | `python pull_category_groups.py --output data/category_groups.csv` |
 | `pull_account_groups.py` | Exports account names, account IDs, account type/subtype, account group, balances, and visibility flags; useful for cash, loan, investment, and net-worth grouping. | `python pull_account_groups.py --output data/account_groups.csv` |
 | `get_unreviewed.py` | Pulls only transactions that need review; writes unreviewed JSON/CSV; upserts fetched rows into `all_transactions.csv`. | `python get_unreviewed.py --data-dir data --filename unreviewed_transactions` |
-| `filter_unreviewed_to_push.py` | Reads `unreviewed_transactions.csv`; filters by merchant, account, category, or group filter files; writes `push.csv`; supports append, exact matching, case sensitivity, and dry runs. | `python filter_unreviewed_to_push.py --filter-type groups --output push_groups` |
+| `filter_unreviewed_to_push.py` | Reads `unreviewed_transactions.csv`; filters by parameterized merchant, account, category, or group filter files; writes `push.csv`; supports append, exact matching, case sensitivity, dry runs, and graceful setup errors. | `python filter_unreviewed_to_push.py --filter-type groups --group-filter data/my-groups.txt --output push_groups` |
 | `filter_all_to_push.py` | Same style as the unreviewed filter, but scans `all_transactions.csv`; useful for historical cleanup or bulk edits beyond unreviewed rows. | `python filter_all_to_push.py --filter-type categories --exact --output data/push.csv` |
 | `copy_transaction_ids_to_push.py` | Copies selected rows from `all_transactions.csv` into a push file by transaction ID; accepts positional IDs or a delimited text string. | `python copy_transaction_ids_to_push.py --transaction-ids "txn_1, txn_2" --output data/push.csv` |
 | `grep_patterns_from_all.py` | Searches every CSV field in `all_transactions.csv` for patterns from a text file; writes matching rows plus a `Matched Patterns` column. | `python grep_patterns_from_all.py --patterns data/patterns.txt --output data/patterns_from_all.csv` |
 | `push.py` | Main pusher; reads CSV or JSON update rows; maps category/tag names to Monarch IDs; updates merchant, category, amount, date, notes, hide-from-reports, review status, and tags; supports dry-run, live push, local CSV patching, and local-only recovery. | `python push.py --data-dir data --input-file push.csv --dry-run true` |
 | `legacy_push_changes.py` | Legacy pusher for older CSVs that already contain raw Monarch fields such as `category_id`, `merchant_name`, and `needs_review`; kept as a fallback/debugging path. | `python legacy_push_changes.py --input data/legacy_push.csv --dry-run true` |
 | `report_group_net_by_year.py` | Generates a CSV report of net income/expense totals by category group for each year. | `python report_group_net_by_year.py --include-unmapped` |
-| `report_unreviewed_pivots.py` | Generates an Excel workbook with summaries and pivot-style views for unreviewed transactions by merchant, account, and category. | `python report_unreviewed_pivots.py --output data/unreviewed_pivots.xlsx` |
+| `report_unreviewed_pivots.py` | Generates an Excel workbook with summaries and pivot-style views for pending/unreviewed transactions by merchant, account, category, and account subtype. | `python report_unreviewed_pivots.py --transactions data/unreviewed_transactions.csv --account-groups data/account_groups.csv --output data/unreviewed_pivots.xlsx` |
 | `report_yearly_amount_pivots.py` | Generates an Excel workbook of yearly amount pivots by group, category, merchant, account, and tag; supports explicit years and exclusions. | `python report_yearly_amount_pivots.py --exclude-groups "Transfers" --exclude-categories "Internal"` |
+| `report_tag_activity.py` | Generates an Excel workbook for tagged transactions in the last three calendar years; explodes comma-separated tags into tag-level summaries and detail tabs sorted by amount, merchant, and date. | `python report_tag_activity.py --output data/tag_activity.xlsx` |
 | `report_recurring_optimization.py` | Generates an expense-only Excel workbook that finds recurring spend in selected category groups or wildcard-matched category names, scores cadence, recency, frequency, variability, category focus, price movement, and optimization type, then estimates potential savings. | `python report_recurring_optimization.py --optimizable-type categories --optimizable-categories data/optimizable_categories.txt` |
 | `business_report.py` | Generates a focused Excel workbook for selected category groups and fiscal year; includes group, category, merchant, account, tag, and transaction-detail tabs. | `python business_report.py --group-terms "Business, Travel" --fiscal-year 2026` |
 | `.gitignore` | Keeps local sessions, generated data, virtual environments, caches, and other machine-local files out of the public repo. | Run `git status --short` before committing. |
@@ -377,6 +395,7 @@ python business_report.py --group-terms "Business, Travel" --exclude-group-terms
 | `data/category_groups.csv` | `pull_category_groups.py` | Category-to-group map used by group filters and reports. |
 | `data/account_groups.csv` | `pull_account_groups.py` | Account-to-type/group map for cash, loan, investment, and net-worth grouping. |
 | `data/push.csv` | filter/copy scripts or manual editing | Rows to dry-run or push back to Monarch. |
+| `data/tag_activity.xlsx` | `report_tag_activity.py` | Workbook summarizing tagged transactions and tag-level detail views. |
 | `data/optimizable_groups.txt` | user-created | One category group name per line for `report_recurring_optimization.py` expense analysis. |
 | `data/optimizable_categories.txt` | user-created | One category search term per line for wildcard category matching in `report_recurring_optimization.py`. |
 | `data/recurring_optimization.xlsx` | `report_recurring_optimization.py` | Workbook of recurring expense optimization candidates. |

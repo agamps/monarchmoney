@@ -14,6 +14,8 @@ with # are ignored. Matching is case-insensitive substring matching by default.
 
 import argparse
 import csv
+import os
+import sys
 from pathlib import Path
 
 CSV_ENCODINGS = ("utf-8-sig", "utf-8", "cp1252", "latin-1")
@@ -38,7 +40,7 @@ def parse_args() -> argparse.Namespace:
         "--filter-type",
         choices=("accounts", "merchants", "categories", "groups", "all", "both"),
         default="all",
-        help="Which default filter file to use.",
+        help="Which filter file set to use. 'both' means merchants and accounts.",
     )
     parser.add_argument(
         "--unreviewed",
@@ -60,25 +62,25 @@ def parse_args() -> argparse.Namespace:
     )
     parser.add_argument(
         "--merchant-filter",
-        type=Path,
+        type=optional_path,
         default=None,
         help="Merchant filter file. Defaults to data/filter-unrev-merchants.txt if present.",
     )
     parser.add_argument(
         "--account-filter",
-        type=Path,
+        type=optional_path,
         default=None,
         help="Account filter file. Defaults to data/filter-unrev-accounts.txt if present.",
     )
     parser.add_argument(
         "--category-filter",
-        type=Path,
+        type=optional_path,
         default=None,
         help="Category filter file. Defaults to data/filter-unrev-categories.txt if present.",
     )
     parser.add_argument(
         "--group-filter",
-        type=Path,
+        type=optional_path,
         default=None,
         help="Group filter file. Defaults to data/filter-unrev-groups.txt if present.",
     )
@@ -106,6 +108,11 @@ def parse_args() -> argparse.Namespace:
     return parser.parse_args()
 
 
+def optional_path(value: str) -> Path | None:
+    text = value.strip()
+    return Path(text) if text else None
+
+
 def normalize(value: str, *, case_sensitive: bool) -> str:
     text = value.strip()
     return text if case_sensitive else text.casefold()
@@ -115,13 +122,53 @@ def resolve_filter_file(
     explicit_path: Path | None,
     default_path: Path,
     label: str,
+    *,
+    required: bool,
 ) -> Path | None:
     if explicit_path is not None:
         if not explicit_path.exists():
-            raise FileNotFoundError(f"{label} filter file not found: {explicit_path}")
+            if required:
+                raise FileNotFoundError(
+                    f"{label} filter file not found: {explicit_path}"
+                )
+            return None
         return explicit_path
 
-    return default_path if default_path.exists() else None
+    if default_path.exists():
+        return default_path
+    if required:
+        raise FileNotFoundError(f"{label} filter file not found: {default_path}")
+    return None
+
+
+def selected_filter_kinds(filter_type: str) -> set[str]:
+    if filter_type == "all":
+        return {"merchants", "accounts", "categories", "groups"}
+    if filter_type == "both":
+        return {"merchants", "accounts"}
+    return {filter_type}
+
+
+def filter_path_label(explicit_path: Path | None, default_path: Path) -> str:
+    return str(explicit_path or default_path)
+
+
+def expected_filter_message(args: argparse.Namespace) -> str:
+    selected = selected_filter_kinds(args.filter_type)
+    paths: list[str] = []
+
+    if "merchants" in selected:
+        paths.append(filter_path_label(args.merchant_filter, DEFAULT_MERCHANT_FILTER))
+    if "accounts" in selected:
+        paths.append(filter_path_label(args.account_filter, DEFAULT_ACCOUNT_FILTER))
+    if "categories" in selected:
+        paths.append(filter_path_label(args.category_filter, DEFAULT_CATEGORY_FILTER))
+    if "groups" in selected:
+        paths.append(filter_path_label(args.group_filter, DEFAULT_GROUP_FILTER))
+
+    if len(paths) == 1:
+        return paths[0]
+    return ", ".join(paths[:-1]) + f", or {paths[-1]}"
 
 
 def resolve_output_path(path: Path) -> Path:
@@ -141,21 +188,40 @@ def load_terms(path: Path | None, *, case_sensitive: bool) -> list[str]:
 
     terms: list[str] = []
     seen: set[str] = set()
+    last_error: UnicodeDecodeError | None = None
 
-    with open(path, "r", encoding="utf-8-sig") as f:
-        for line in f:
-            term = line.strip()
-            if not term or term.startswith("#"):
-                continue
+    for encoding in CSV_ENCODINGS:
+        try:
+            with open(path, "r", encoding=encoding) as f:
+                for line in f:
+                    term = line.strip()
+                    if not term or term.startswith("#"):
+                        continue
 
-            key = normalize(term, case_sensitive=case_sensitive)
-            if key in seen:
-                continue
+                    key = normalize(term, case_sensitive=case_sensitive)
+                    if key in seen:
+                        continue
 
-            seen.add(key)
-            terms.append(term)
+                    seen.add(key)
+                    terms.append(term)
+            return terms
+        except UnicodeDecodeError as e:
+            last_error = e
 
-    return terms
+    assert last_error is not None
+    raise ValueError(
+        f"Could not decode {path} using supported encodings: {', '.join(CSV_ENCODINGS)}"
+    ) from last_error
+
+
+def print_filter_summary(
+    label: str,
+    path: Path | None,
+    terms: list[str],
+    hits: int,
+) -> None:
+    source = str(path) if path is not None else "not found"
+    print(f"  {label}: {source} ({len(terms)} terms, {hits} hits)")
 
 
 def load_csv(path: Path) -> tuple[list[str], list[dict[str, str]]]:
@@ -353,35 +419,48 @@ def write_rows(
 def main() -> None:
     args = parse_args()
     output_path = resolve_output_path(args.output)
+    selected_filters = selected_filter_kinds(args.filter_type)
 
-    merchant_filter_file = resolve_filter_file(
-        args.merchant_filter, DEFAULT_MERCHANT_FILTER, "Merchant"
+    merchant_filter_file = (
+        resolve_filter_file(
+            args.merchant_filter,
+            DEFAULT_MERCHANT_FILTER,
+            "Merchant",
+            required=args.filter_type == "merchants",
+        )
+        if "merchants" in selected_filters
+        else None
     )
-    account_filter_file = resolve_filter_file(
-        args.account_filter, DEFAULT_ACCOUNT_FILTER, "Account"
+    account_filter_file = (
+        resolve_filter_file(
+            args.account_filter,
+            DEFAULT_ACCOUNT_FILTER,
+            "Account",
+            required=args.filter_type == "accounts",
+        )
+        if "accounts" in selected_filters
+        else None
     )
-    category_filter_file = resolve_filter_file(
-        args.category_filter, DEFAULT_CATEGORY_FILTER, "Category"
+    category_filter_file = (
+        resolve_filter_file(
+            args.category_filter,
+            DEFAULT_CATEGORY_FILTER,
+            "Category",
+            required=args.filter_type == "categories",
+        )
+        if "categories" in selected_filters
+        else None
     )
-    group_filter_file = resolve_filter_file(
-        args.group_filter, DEFAULT_GROUP_FILTER, "Group"
+    group_filter_file = (
+        resolve_filter_file(
+            args.group_filter,
+            DEFAULT_GROUP_FILTER,
+            "Group",
+            required=args.filter_type == "groups",
+        )
+        if "groups" in selected_filters
+        else None
     )
-    if args.filter_type == "accounts":
-        merchant_filter_file = None
-        category_filter_file = None
-        group_filter_file = None
-    elif args.filter_type == "merchants":
-        account_filter_file = None
-        category_filter_file = None
-        group_filter_file = None
-    elif args.filter_type == "categories":
-        merchant_filter_file = None
-        account_filter_file = None
-        group_filter_file = None
-    elif args.filter_type == "groups":
-        merchant_filter_file = None
-        account_filter_file = None
-        category_filter_file = None
 
     merchant_terms = load_terms(
         merchant_filter_file, case_sensitive=args.case_sensitive
@@ -391,20 +470,10 @@ def main() -> None:
     group_terms = load_terms(group_filter_file, case_sensitive=args.case_sensitive)
 
     if not merchant_terms and not account_terms and not category_terms and not group_terms:
-        if args.filter_type == "accounts":
-            expected = str(DEFAULT_ACCOUNT_FILTER)
-        elif args.filter_type == "merchants":
-            expected = str(DEFAULT_MERCHANT_FILTER)
-        elif args.filter_type == "categories":
-            expected = str(DEFAULT_CATEGORY_FILTER)
-        elif args.filter_type == "groups":
-            expected = str(DEFAULT_GROUP_FILTER)
-        else:
-            expected = (
-                f"{DEFAULT_MERCHANT_FILTER}, {DEFAULT_ACCOUNT_FILTER}, "
-                f"{DEFAULT_CATEGORY_FILTER}, or {DEFAULT_GROUP_FILTER}"
-            )
-        raise ValueError(f"No filter terms found. Create {expected}.")
+        expected = expected_filter_message(args)
+        raise ValueError(
+            f"No filter terms found in {expected}. Add one term per line."
+        )
 
     source_fieldnames, unreviewed_rows = load_csv(args.unreviewed)
     id_column = find_column(source_fieldnames, ("Transaction ID", "id", "transaction_id"))
@@ -433,6 +502,10 @@ def main() -> None:
 
     matched_rows: list[dict[str, str]] = []
     selected_ids: set[str] = set()
+    merchant_hits = 0
+    account_hits = 0
+    category_hits = 0
+    group_hits = 0
     if args.write_mode == "append":
         output_ids = existing_output_ids(output_path)
         if output_ids is None:
@@ -489,15 +562,35 @@ def main() -> None:
             )
         )
 
+        if merchant_hit:
+            merchant_hits += 1
+        if account_hit:
+            account_hits += 1
+        if category_hit:
+            category_hits += 1
+        if group_hit:
+            group_hits += 1
+
         if merchant_hit or account_hit or category_hit or group_hit:
             selected_ids.add(transaction_id)
             matched_rows.append(row)
 
+    print(f"Filter type: {args.filter_type}")
+    print(f"Unreviewed source: {args.unreviewed}")
     print(f"Unreviewed rows scanned: {len(unreviewed_rows)}")
-    print(f"Merchant filters: {len(merchant_terms)}")
-    print(f"Account filters: {len(account_terms)}")
-    print(f"Category filters: {len(category_terms)}")
-    print(f"Group filters: {len(group_terms)}")
+    print("Active filters:")
+    if "merchants" in selected_filters:
+        print_filter_summary(
+            "Merchant", merchant_filter_file, merchant_terms, merchant_hits
+        )
+    if "accounts" in selected_filters:
+        print_filter_summary("Account", account_filter_file, account_terms, account_hits)
+    if "categories" in selected_filters:
+        print_filter_summary(
+            "Category", category_filter_file, category_terms, category_hits
+        )
+    if "groups" in selected_filters:
+        print_filter_summary("Group", group_filter_file, group_terms, group_hits)
     print(f"Write mode: {args.write_mode}")
     print(f"Rows to write: {len(matched_rows)}")
 
@@ -527,5 +620,18 @@ def main() -> None:
     print(f"Done: {output_path}")
 
 
+def run() -> int:
+    try:
+        main()
+    except (FileNotFoundError, OSError, ValueError) as e:
+        print(f"ERROR: {e}", file=sys.stderr)
+        return 1
+    return 0
+
+
 if __name__ == "__main__":
-    main()
+    exit_code = run()
+    if exit_code:
+        sys.stdout.flush()
+        sys.stderr.flush()
+        os._exit(exit_code)

@@ -8,6 +8,7 @@ from openpyxl.styles import PatternFill
 
 CSV_ENCODINGS = ("utf-8-sig", "utf-8", "cp1252", "latin-1")
 DEFAULT_TRANSACTIONS = Path("data/unreviewed_transactions.csv")
+DEFAULT_ACCOUNT_GROUPS = Path("data/account_groups.csv")
 DEFAULT_OUTPUT = Path("data/unreviewed_pivots.xlsx")
 
 HEADER_FILL = PatternFill(fill_type="solid", fgColor="1F4E78")
@@ -23,9 +24,17 @@ def parse_args() -> argparse.Namespace:
     )
     parser.add_argument(
         "--transactions",
+        "--pending-transactions",
+        dest="transactions",
         type=Path,
         default=DEFAULT_TRANSACTIONS,
-        help="Path to unreviewed_transactions.csv.",
+        help=f"Path to pending/unreviewed transactions CSV (default: {DEFAULT_TRANSACTIONS}).",
+    )
+    parser.add_argument(
+        "--account-groups",
+        type=Path,
+        default=DEFAULT_ACCOUNT_GROUPS,
+        help=f"Path to account_groups.csv (default: {DEFAULT_ACCOUNT_GROUPS}).",
     )
     parser.add_argument(
         "--output",
@@ -101,14 +110,60 @@ def prepare_transactions(df: pd.DataFrame, path: Path) -> pd.DataFrame:
     return prepared
 
 
-def summary_by(df: pd.DataFrame, dimension: str) -> pd.DataFrame:
+def clean_dimension(series: pd.Series, blank_label: str = "(blank)") -> pd.Series:
+    return (
+        series.fillna("")
+        .astype(str)
+        .str.strip()
+        .replace("", blank_label)
+    )
+
+
+def prepare_account_metadata(df: pd.DataFrame, path: Path) -> pd.DataFrame:
+    require_columns(df, path, ["Account", "Account Subtype"])
+
+    prepared = df.copy()
+    prepared["Account"] = clean_dimension(prepared["Account"])
+    prepared["Account Subtype"] = clean_dimension(prepared["Account Subtype"])
+
+    if "Account ID" in prepared.columns:
+        prepared["Account ID"] = clean_dimension(prepared["Account ID"])
+
+    return prepared
+
+
+def add_account_subtypes(
+    transactions_df: pd.DataFrame,
+    account_groups_df: pd.DataFrame,
+) -> pd.DataFrame:
+    transactions_df = transactions_df.copy()
+    join_column = (
+        "Account ID"
+        if "Account ID" in transactions_df.columns and "Account ID" in account_groups_df.columns
+        else "Account"
+    )
+    transactions_df[join_column] = clean_dimension(transactions_df[join_column])
+
+    mapping = account_groups_df[[join_column, "Account Subtype"]].drop_duplicates(
+        subset=[join_column],
+        keep="first",
+    )
+
+    if "Account Subtype" in transactions_df.columns:
+        transactions_df = transactions_df.drop(columns=["Account Subtype"])
+
+    merged = transactions_df.merge(mapping, on=join_column, how="left")
+    merged["Account Subtype"] = clean_dimension(merged["Account Subtype"], "(unmapped)")
+    return merged
+
+
+def summary_by_dimensions(df: pd.DataFrame, dimensions: list[str]) -> pd.DataFrame:
+    columns = dimensions + ["Transaction Count", "Net Amount", "Total Abs Amount"]
     if df.empty:
-        return pd.DataFrame(
-            columns=[dimension, "Transaction Count", "Net Amount", "Total Abs Amount"]
-        )
+        return pd.DataFrame(columns=columns)
 
     summary = (
-        df.groupby(dimension, dropna=False)
+        df.groupby(dimensions, dropna=False)
         .agg(
             **{
                 "Transaction Count": ("Transaction ID", "count"),
@@ -119,10 +174,14 @@ def summary_by(df: pd.DataFrame, dimension: str) -> pd.DataFrame:
         .reset_index()
     )
     return summary.sort_values(
-        ["Transaction Count", "Total Abs Amount", dimension],
-        ascending=[False, False, True],
+        ["Transaction Count", "Total Abs Amount"] + dimensions,
+        ascending=[False, False] + [True] * len(dimensions),
         kind="stable",
     )
+
+
+def summary_by(df: pd.DataFrame, dimension: str) -> pd.DataFrame:
+    return summary_by_dimensions(df, [dimension])
 
 
 def append_total_row(df: pd.DataFrame) -> pd.DataFrame:
@@ -148,27 +207,7 @@ def append_total_row(df: pd.DataFrame) -> pd.DataFrame:
 
 
 def summary_by_pair(df: pd.DataFrame, first: str, second: str) -> pd.DataFrame:
-    if df.empty:
-        return pd.DataFrame(
-            columns=[first, second, "Transaction Count", "Net Amount", "Total Abs Amount"]
-        )
-
-    summary = (
-        df.groupby([first, second], dropna=False)
-        .agg(
-            **{
-                "Transaction Count": ("Transaction ID", "count"),
-                "Net Amount": ("Amount", "sum"),
-                "Total Abs Amount": ("Total Abs Amount", "sum"),
-            }
-        )
-        .reset_index()
-    )
-    return summary.sort_values(
-        ["Transaction Count", "Total Abs Amount", first, second],
-        ascending=[False, False, True, True],
-        kind="stable",
-    )
+    return summary_by_dimensions(df, [first, second])
 
 
 def count_matrix(df: pd.DataFrame, index: str, columns: str) -> pd.DataFrame:
@@ -205,6 +244,7 @@ def count_matrix(df: pd.DataFrame, index: str, columns: str) -> pd.DataFrame:
 def raw_unreviewed(df: pd.DataFrame) -> pd.DataFrame:
     preferred_columns = [
         "Transaction ID",
+        "Account Subtype",
         "Account",
         "Date",
         "Merchant",
@@ -268,6 +308,9 @@ def write_report(output_path: Path, df: pd.DataFrame) -> bool:
         "Merchant Summary": append_total_row(summary_by(df, "Merchant")),
         "Account Summary": append_total_row(summary_by(df, "Account")),
         "Category Summary": append_total_row(summary_by(df, "Category")),
+        "Acct Subtype Account Merchant": append_total_row(
+            summary_by_dimensions(df, ["Account Subtype", "Account", "Merchant"])
+        ),
         "Merchant Account": append_total_row(summary_by_pair(df, "Merchant", "Account")),
         "Account Merchant": append_total_row(summary_by_pair(df, "Account", "Merchant")),
         "Account Category": append_total_row(summary_by_pair(df, "Account", "Category")),
@@ -295,9 +338,16 @@ def write_report(output_path: Path, df: pd.DataFrame) -> bool:
 def main() -> None:
     args = parse_args()
     transactions_df = read_csv(args.transactions)
+    account_groups_df = read_csv(args.account_groups)
     prepared_df = prepare_transactions(transactions_df, args.transactions)
+    prepared_account_groups_df = prepare_account_metadata(
+        account_groups_df,
+        args.account_groups,
+    )
+    prepared_df = add_account_subtypes(prepared_df, prepared_account_groups_df)
 
     print(f"Read {len(prepared_df)} unreviewed transaction rows from {args.transactions}")
+    print(f"Read account subtype mappings from {args.account_groups}")
     if not write_report(args.output, prepared_df):
         return
 
