@@ -24,60 +24,200 @@ directories. Double-check `git status` before committing.
 
 ## Requirements
 
-- Python 3.10 or newer; Python 3.11 or 3.12 is the most conservative choice
-  for this repo
+- VS Code
+- The VS Code Python extension
+- Python 3.10 or newer. As of June 2026, the latest stable Python release is
+  Python 3.14.6, and Python 3.14.x is the recommended choice for a new setup.
 - A Monarch Money account
 - Python packages used by the scripts:
 
 ```bash
-python -m pip install monarchmoney gql pandas openpyxl
+python -m pip install "monarchmoney==0.1.15" "gql==4.0.0" pandas openpyxl
 ```
 
-`pandas` and `openpyxl` are needed for the report and Excel-workbook scripts.
+`pandas` and `openpyxl` are needed for the CSV and Excel report scripts.
+`monarchmoney` is the unofficial Monarch Money API wrapper. `gql` is the
+GraphQL client it uses under the hood; this repo includes a small compatibility
+shim for `gql 4.0.0` in `monarch_api.py`.
 
 ### Python Version Note
 
 The scripts use modern type-hint syntax such as `Exception | None`, so Python
-3.10+ is required. As of May 2026, Python 3.14 is the latest stable Python
-series, and the regular CPython 3.14 build should generally work. The practical
-quirk is dependency support: very new Python versions, prerelease versions, or
-free-threaded Python builds can expose missing wheels or debugger/package issues
-before the rest of the ecosystem catches up.
-
-If setup behaves strangely, create the virtual environment with Python 3.12 or
-3.13:
+3.10+ is required. Python.org currently lists Python 3.14.6 as the latest
+stable release. Very new Python versions, prerelease versions, or free-threaded
+Python builds can expose missing wheels or debugger/package issues before the
+rest of the ecosystem catches up. If setup behaves strangely, create the virtual
+environment with Python 3.12 or 3.13:
 
 ```bash
-py -3.12 -m venv .venv
+py -3.13 -m venv .venv
 ```
 
 On macOS or Linux, use the matching installed binary, for example
-`python3.12 -m venv .venv`.
+`python3.13 -m venv .venv`.
 
-## Quick Start
+## Fresh VS Code Setup
 
-1. Create and activate a virtual environment.
+Use these steps when opening the project on a new computer or in a fresh VS
+Code install. A virtual environment, or venv, is a private Python install for
+this project so these packages do not leak into the rest of your machine.
+
+1. Install VS Code and Python.
+
+Install VS Code, then install the VS Code extension named `Python` from
+Microsoft. Install Python from python.org, Homebrew, pyenv, or the Windows
+Store. Python 3.14.x is the recommended target for a fresh setup; Python 3.14.6
+is the latest stable release as of June 2026.
+
+2. Open this project folder in VS Code.
+
+If you have the `code` command available:
 
 ```bash
-python -m venv .venv
+code monarchmoney.code-workspace
+```
+
+Otherwise, open VS Code and use `File -> Open Folder...`, then choose this
+repository folder.
+
+3. Open the VS Code terminal.
+
+Use `Terminal -> New Terminal`. On macOS or Linux, the terminal usually uses
+`zsh` or `bash`. On Windows, PowerShell is fine.
+
+4. Check that Python is available.
+
+macOS or Linux:
+
+```bash
+python3 --version
+```
+
+Windows PowerShell:
+
+```powershell
+py --version
+```
+
+You should ideally see Python 3.14.x, such as Python 3.14.6. Anything from
+Python 3.10 upward is supported. If you do not see Python at all, install
+Python first and then reopen VS Code.
+
+5. Create the project virtual environment.
+
+macOS or Linux, preferably with Python 3.14:
+
+```bash
+python3.14 -m venv .venv
+```
+
+If that says `python3.14` was not found, use the default Python 3 command:
+
+```bash
+python3 -m venv .venv
+```
+
+Windows PowerShell, preferably with Python 3.14:
+
+```powershell
+py -3.14 -m venv .venv
+```
+
+If that says Python 3.14 is not installed, use the default Python launcher:
+
+```powershell
+py -m venv .venv
+```
+
+6. Activate the virtual environment.
+
+macOS or Linux:
+
+```bash
+source .venv/bin/activate
+```
+
+Windows PowerShell:
+
+```powershell
 .\.venv\Scripts\Activate.ps1
 ```
 
-On macOS or Linux, use `source .venv/bin/activate` instead.
+After activation, your terminal prompt usually starts with `(.venv)`. If
+PowerShell blocks activation, you can still run everything with the venv Python
+directly, for example `.\.venv\Scripts\python.exe login.py`.
 
-2. Install dependencies.
+7. Upgrade pip inside the venv.
+
+`pip` is Python's package installer. Run this after activation:
 
 ```bash
-python -m pip install monarchmoney gql pandas openpyxl
+python -m pip install --upgrade pip
 ```
 
-3. Log in and save a local session.
+8. Install this project's Python packages.
+
+```bash
+python -m pip install "monarchmoney==0.1.15" "gql==4.0.0" pandas openpyxl
+```
+
+9. Confirm the important packages installed.
+
+```bash
+python -m pip show monarchmoney gql pandas openpyxl
+```
+
+You should see `monarchmoney 0.1.15` and `gql 4.0.0`.
+
+10. Tell VS Code to use the venv.
+
+Open the Command Palette:
+
+```text
+Cmd+Shift+P on macOS
+Ctrl+Shift+P on Windows or Linux
+```
+
+Run `Python: Select Interpreter`, then choose:
+
+```text
+.venv/bin/python on macOS or Linux
+.venv\Scripts\python.exe on Windows
+```
+
+If VS Code does not show it immediately, choose `Enter interpreter path...` and
+pick the path above.
+
+11. Log in to Monarch and save a local session.
 
 ```bash
 python login.py
 ```
 
-4. Export transactions and lookup data.
+This prompts for your Monarch email, password, and MFA code if needed. It saves
+the session at `.mm/mm_session.pickle`, which is ignored by git.
+
+12. Run a small export to make sure everything works.
+
+```bash
+python pull_account_groups.py --output data/account_groups.csv
+```
+
+If that creates `data/account_groups.csv`, the API connection and local setup
+are working.
+
+## Quick Start
+
+After the VS Code setup is complete and the venv is activated, the normal flow
+is:
+
+1. Log in and save a local session.
+
+```bash
+python login.py
+```
+
+2. Export transactions and lookup data.
 
 ```bash
 python pull_transactions_persist_batches.py --data-dir data
@@ -86,7 +226,7 @@ python pull_category_groups.py --output data/category_groups.csv
 python pull_account_groups.py --output data/account_groups.csv
 ```
 
-5. Create a review/push file, edit it, dry-run the push, then push for real.
+3. Create a review/push file, edit it, dry-run the push, then push for real.
 
 ```bash
 python filter_unreviewed_to_push.py --filter-type merchants --dry-run
@@ -97,41 +237,8 @@ python push.py --data-dir data --input-file push.csv --dry-run false --update-lo
 ## VS Code Setup
 
 This repo includes `.vscode/launch.json` and `monarchmoney.code-workspace` for
-common debug/run workflows.
-
-1. Install the VS Code Python extension. Pylance is also helpful for type hints
-   and completions.
-
-2. Open the workspace file:
-
-```bash
-code monarchmoney.code-workspace
-```
-
-3. Create a virtual environment from the VS Code terminal:
-
-```bash
-py -3.12 -m venv .venv
-.\.venv\Scripts\Activate.ps1
-python -m pip install monarchmoney gql pandas openpyxl
-```
-
-If PowerShell blocks activation, you can still install packages without
-activating:
-
-```bash
-.\.venv\Scripts\python.exe -m pip install monarchmoney gql pandas openpyxl
-```
-
-4. Select the project interpreter:
-
-```text
-Ctrl+Shift+P -> Python: Select Interpreter -> .venv\Scripts\python.exe
-```
-
-On macOS or Linux, select `.venv/bin/python`.
-
-5. Use the Run and Debug panel for the included profiles:
+common debug/run workflows. Once the venv and interpreter are set up, use the
+Run and Debug panel for the included profiles:
 
 - `Auth - Login`
 - `Pull - Transactions and Unreviewed`
