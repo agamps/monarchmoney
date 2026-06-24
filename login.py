@@ -4,7 +4,11 @@ from pathlib import Path
 from gql.transport.exceptions import TransportServerError
 from monarchmoney import MonarchMoney
 
+from monarch_api import configure_monarch_api
+
 SESSION_FILE = Path(".mm/mm_session.pickle")
+
+configure_monarch_api()
 
 
 async def session_is_valid(mm: MonarchMoney) -> bool:

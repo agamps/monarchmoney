@@ -3,19 +3,18 @@ import argparse
 import csv
 import json
 import os
-import subprocess
-import sys
 from pathlib import Path
 
 from gql import gql
 from gql.transport.exceptions import TransportServerError
 from monarchmoney import MonarchMoney
 
+from monarch_api import configure_monarch_api
+from monarch_auth import get_monarch_client
+
 # ----------------------------
 # Config
 # ----------------------------
-SESSION_FILE = Path(".mm/mm_session.pickle")
-LOGIN_SCRIPT = Path("login.py")
 DEFAULT_DATA_DIR = Path(os.environ.get("MONARCH_DATA_DIR", "data"))
 DEFAULT_OUTPUT_BASENAME = "unreviewed_transactions"
 BATCH_SIZE = 400  # configurable
@@ -32,6 +31,8 @@ CSV_HEADERS = [
     "Hide From Reports",
     "Needs Review",
 ]
+
+configure_monarch_api()
 
 
 def parse_args() -> argparse.Namespace:
@@ -60,12 +61,8 @@ def parse_args() -> argparse.Namespace:
 
 
 async def get_mm() -> MonarchMoney:
-    mm = MonarchMoney()
-    result = subprocess.run([sys.executable, str(LOGIN_SCRIPT)], check=False)
-    if result.returncode != 0:
-        raise RuntimeError(f"{LOGIN_SCRIPT} failed with exit code {result.returncode}")
-    mm.load_session(str(SESSION_FILE))
-    return mm
+    # kept for compatibility with callers; delegates to shared helper
+    return await get_monarch_client()
 
 
 async def fetch_unreviewed_with_reauth(
@@ -78,8 +75,8 @@ async def fetch_unreviewed_with_reauth(
         if "401" not in str(e):
             raise
 
-        print("Session expired. Re-running login.py and retrying batch...")
-        mm = await get_mm()
+        print("Session expired. Re-running login and retrying batch...")
+        mm = await get_monarch_client()
         transactions = await get_unreviewed_batch(mm, limit, offset)
         return mm, transactions
 

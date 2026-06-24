@@ -15,18 +15,16 @@ import argparse
 import asyncio
 import csv
 import os
-import subprocess
-import sys
 from pathlib import Path
 from typing import Any
 
-from gql.transport.exceptions import TransportServerError
-from monarchmoney import MonarchMoney
+from monarch_api import configure_monarch_api
+from monarch_auth import get_monarch_client
 
-SESSION_FILE = Path(".mm/mm_session.pickle")
-LOGIN_SCRIPT = Path("login.py")
 DEFAULT_DATA_DIR = Path(os.environ.get("MONARCH_DATA_DIR", "data"))
 DEFAULT_OUTPUT = DEFAULT_DATA_DIR / "account_groups.csv"
+
+configure_monarch_api()
 
 
 FIELDNAMES = [
@@ -67,49 +65,7 @@ def parse_args() -> argparse.Namespace:
     return parser.parse_args()
 
 
-async def get_mm() -> MonarchMoney:
-    if not SESSION_FILE.exists():
-        print(f"Session file not found: {SESSION_FILE}")
-        print(f"Running {LOGIN_SCRIPT}...")
-        result = subprocess.run([sys.executable, str(LOGIN_SCRIPT)], check=False)
-        if result.returncode != 0:
-            raise RuntimeError(
-                f"Unable to create a Monarch session. {LOGIN_SCRIPT} exited with code {result.returncode}."
-            )
-
-        if not SESSION_FILE.exists():
-            raise RuntimeError(
-                f"{LOGIN_SCRIPT} completed but did not create {SESSION_FILE}."
-            )
-
-    mm = MonarchMoney()
-    mm.load_session(str(SESSION_FILE))
-
-    try:
-        await mm.get_accounts()
-        return mm
-    except TransportServerError as e:
-        if "401" not in str(e):
-            raise
-
-        print("Saved session expired. Re-running login.py...")
-        result = subprocess.run([sys.executable, str(LOGIN_SCRIPT)], check=False)
-        if result.returncode != 0:
-            raise RuntimeError(
-                "Monarch session expired and automatic re-login failed. "
-                f"Please run `py .\\{LOGIN_SCRIPT}` and try again."
-            ) from e
-
-        if not SESSION_FILE.exists():
-            raise RuntimeError(
-                "Monarch re-login completed but no session file was saved. "
-                f"Expected: {SESSION_FILE}"
-            ) from e
-
-        mm = MonarchMoney()
-        mm.load_session(str(SESSION_FILE))
-        await mm.get_accounts()
-        return mm
+# Authentication handled by `monarch_auth.get_monarch_client()`
 
 
 def label_from_key(value: object) -> str:
@@ -191,7 +147,7 @@ def write_csv(path: Path, rows: list[dict[str, object]]) -> None:
 
 async def main() -> None:
     args = parse_args()
-    mm = await get_mm()
+    mm = await get_monarch_client()
 
     print("Fetching accounts...")
     accounts_result = await mm.get_accounts()

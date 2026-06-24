@@ -47,11 +47,12 @@ from pathlib import Path
 
 import pandas as pd
 from gql import gql
-from monarchmoney import MonarchMoney
+from monarch_auth import get_monarch_client
+
+from monarch_api import configure_monarch_api
 
 # ── Config (mirrors push.py) ────────────────────────────────────────────────
 
-SESSION_FILE = Path(".mm/mm_session.pickle")
 DEFAULT_DATA_DIR = Path(os.environ.get("MONARCH_DATA_DIR", "data"))
 DEFAULT_INPUT_FILE = Path(os.environ.get("MONARCH_PUSH_FILE", "push.csv"))
 DEFAULT_ALL_TRANSACTIONS_FILE = Path(
@@ -71,6 +72,8 @@ UPDATABLE_COL_GROUPS = (
     HIDE_FROM_REPORTS_COLS,
     NEEDS_REVIEW_COLS,
 )
+
+configure_monarch_api()
 
 # ── GraphQL mutation — same as the Monarch UI "mark reviewed" action ────────
 
@@ -93,25 +96,8 @@ REVIEW_MUTATION = gql("""
 """)
 
 
-# ── Auth ────────────────────────────────────────────────────────────────────
-
-async def get_client() -> MonarchMoney:
-    """Load saved session or prompt for interactive login."""
-    mm = MonarchMoney()
-    if SESSION_FILE.exists():
-        try:
-            mm.load_session(str(SESSION_FILE))
-            print(f"  Session loaded from {SESSION_FILE}")
-            return mm
-        except Exception:
-            print("  Warning: session file found but failed to load; prompting login")
-
-    print("  No valid session found. Logging in interactively...")
-    SESSION_FILE.parent.mkdir(parents=True, exist_ok=True)
-    await mm.interactive_login()
-    mm.save_session(str(SESSION_FILE))
-    print(f"  Session saved to {SESSION_FILE}")
-    return mm
+# ── Auth
+# Authentication handled by `monarch_auth.get_monarch_client()`
 
 
 # ── Helpers ─────────────────────────────────────────────────────────────────
@@ -364,7 +350,7 @@ async def main() -> None:
 
     mm = None
     if not dry_run:
-        mm = await get_client()
+        mm = await get_monarch_client()
         print()
 
     success_count = 0

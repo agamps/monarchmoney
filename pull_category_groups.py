@@ -14,15 +14,14 @@ Usage:
 import asyncio
 import argparse
 import csv
-import subprocess
-import sys
 from pathlib import Path
 
 from gql.transport.exceptions import TransportServerError
-from monarchmoney import MonarchMoney
 
-SESSION_FILE = Path(".mm/mm_session.pickle")
-LOGIN_SCRIPT = Path("login.py")
+from monarch_api import configure_monarch_api
+from monarch_auth import get_monarch_client
+
+configure_monarch_api()
 
 
 def parse_args() -> argparse.Namespace:
@@ -37,49 +36,7 @@ def parse_args() -> argparse.Namespace:
     return parser.parse_args()
 
 
-async def get_mm() -> MonarchMoney:
-    if not SESSION_FILE.exists():
-        print(f"Session file not found: {SESSION_FILE}")
-        print(f"Running {LOGIN_SCRIPT}...")
-        result = subprocess.run([sys.executable, str(LOGIN_SCRIPT)], check=False)
-        if result.returncode != 0:
-            raise RuntimeError(
-                f"Unable to create a Monarch session. {LOGIN_SCRIPT} exited with code {result.returncode}."
-            )
-
-        if not SESSION_FILE.exists():
-            raise RuntimeError(
-                f"{LOGIN_SCRIPT} completed but did not create {SESSION_FILE}."
-            )
-
-    mm = MonarchMoney()
-    mm.load_session(str(SESSION_FILE))
-
-    try:
-        await mm.get_accounts()
-        return mm
-    except TransportServerError as e:
-        if "401" not in str(e):
-            raise
-
-        print("Saved session expired. Re-running login.py...")
-        result = subprocess.run([sys.executable, str(LOGIN_SCRIPT)], check=False)
-        if result.returncode != 0:
-            raise RuntimeError(
-                "Monarch session expired and automatic re-login failed. "
-                f"Please run `py .\\{LOGIN_SCRIPT}` and try again."
-            ) from e
-
-        if not SESSION_FILE.exists():
-            raise RuntimeError(
-                "Monarch re-login completed but no session file was saved. "
-                f"Expected: {SESSION_FILE}"
-            ) from e
-
-        mm = MonarchMoney()
-        mm.load_session(str(SESSION_FILE))
-        await mm.get_accounts()
-        return mm
+# Authentication handled by `monarch_auth.get_monarch_client()`
 
 
 async def main() -> None:
@@ -87,7 +44,7 @@ async def main() -> None:
     output_path = Path(args.output)
     output_path.parent.mkdir(parents=True, exist_ok=True)
 
-    mm = await get_mm()
+    mm = await get_monarch_client()
 
     print("\n⬇️  Fetching categories...")
     cat_result = await mm.get_transaction_categories()

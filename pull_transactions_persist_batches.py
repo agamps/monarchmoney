@@ -3,22 +3,23 @@ import argparse
 import csv
 import json
 import os
-import subprocess
-import sys
 from pathlib import Path
 
 from gql.transport.exceptions import TransportServerError
+
+from monarch_api import configure_monarch_api
+from monarch_auth import get_monarch_client
 from monarchmoney import MonarchMoney
 
 # ----------------------------
 # Config
 # ----------------------------
-SESSION_FILE = Path(".mm/mm_session.pickle")
-LOGIN_SCRIPT = Path("login.py")
 DEFAULT_DATA_DIR = Path(os.environ.get("MONARCH_DATA_DIR", "data"))
 BATCH_SIZE = 100  # configurable
 MAX_BATCH_RETRIES = 3
 RETRY_DELAY_SECONDS = 2
+
+configure_monarch_api()
 
 
 def parse_args() -> argparse.Namespace:
@@ -32,19 +33,7 @@ def parse_args() -> argparse.Namespace:
     return parser.parse_args()
 
 
-async def get_mm() -> MonarchMoney:
-    mm = MonarchMoney()
-    result = subprocess.run([sys.executable, str(LOGIN_SCRIPT)], check=False)
-    if result.returncode != 0:
-        raise RuntimeError(f"{LOGIN_SCRIPT} failed with exit code {result.returncode}")
-
-    if not SESSION_FILE.exists():
-        raise FileNotFoundError(
-            f"{LOGIN_SCRIPT} ran, but session file still does not exist: {SESSION_FILE}"
-        )
-
-    mm.load_session(str(SESSION_FILE))
-    return mm
+# Authentication handled by `monarch_auth.get_monarch_client()`
 
 
 async def fetch_transactions_with_reauth(
@@ -58,8 +47,8 @@ async def fetch_transactions_with_reauth(
             if "401" not in str(e):
                 raise
 
-            print("Session expired. Re-running login.py and retrying batch...")
-            mm = await get_mm()
+            print("Session expired. Re-running login and retrying batch...")
+            mm = await get_monarch_client()
         except TimeoutError as e:
             if attempt == MAX_BATCH_RETRIES:
                 raise RuntimeError(
@@ -149,7 +138,7 @@ async def main():
     unreviewed_json = data_dir / "unreviewed_transactions.json"
     unreviewed_csv = data_dir / "unreviewed_transactions.csv"
 
-    mm = await get_mm()
+    mm = await get_monarch_client()
 
     all_transactions: list[dict] = []
     unreviewed_transactions: list[dict] = []
