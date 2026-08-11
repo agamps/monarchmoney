@@ -32,6 +32,25 @@ DEFAULT_DRY_RUN = os.environ.get("MONARCH_DRY_RUN", "true").strip().lower() in {
     "y",
 }
 CSV_ENCODINGS = ("utf-8-sig", "cp1252", "latin-1")
+PUSH_LOG_FIELDS = [
+    "timestamp",
+    "row_number",
+    "transaction_id",
+    "merchant",
+    "row_status",
+    "update_transaction",
+    "update_transaction_response",
+    "set_reviewed",
+    "set_reviewed_response",
+    "set_tags",
+    "set_tags_response",
+    "requested_reviewed",
+    "requested_tag_ids",
+    "payload",
+    "failed_operation",
+    "error_type",
+    "error_message",
+]
 
 configure_monarch_api()
 
@@ -73,6 +92,15 @@ def parse_args() -> argparse.Namespace:
         help=(
             "Skip Monarch API calls and only patch local CSV files from --input-file. "
             "Use after a live push succeeds but local CSV files were locked."
+        ),
+    )
+    parser.add_argument(
+        "--log-file",
+        type=Path,
+        default=None,
+        help=(
+            "Per-row CSV audit log path. Relative bare filenames are placed in "
+            "--data-dir. Defaults to <data-dir>/push_logs/push_<timestamp>.csv."
         ),
     )
     parser.add_argument(
@@ -212,6 +240,37 @@ def resolve_input_file(input_file: Path, data_dir: Path) -> Path:
     return input_file
 
 
+def resolve_log_file(log_file: Path | None, data_dir: Path) -> Path:
+    if log_file is None:
+        timestamp = datetime.now().astimezone().strftime("%Y%m%d_%H%M%S")
+        return data_dir / "push_logs" / f"push_{timestamp}.csv"
+
+    if not log_file.is_absolute() and len(log_file.parts) == 1:
+        return data_dir / log_file
+    return log_file
+
+
+class PushAuditLog:
+    """Append and flush each row so partial results survive an interrupted run."""
+
+    def __init__(self, path: Path):
+        self.path = path
+        path.parent.mkdir(parents=True, exist_ok=True)
+        self._file = open(path, "w", encoding="utf-8-sig", newline="")
+        self._writer = csv.DictWriter(self._file, fieldnames=PUSH_LOG_FIELDS)
+        self._writer.writeheader()
+        self._file.flush()
+
+    def write(self, record: dict[str, Any]) -> None:
+        output = {field: record.get(field, "") for field in PUSH_LOG_FIELDS}
+        output["timestamp"] = datetime.now().astimezone().isoformat(timespec="seconds")
+        self._writer.writerow(output)
+        self._file.flush()
+
+    def close(self) -> None:
+        self._file.close()
+
+
 # Authentication handled by `monarch_auth.get_monarch_client()`
 
 
@@ -248,23 +307,40 @@ async def set_reviewed(mm: MonarchMoney, transaction_id: str, reviewed: bool = T
     )
 
 
-async def update_transaction_safe(mm: MonarchMoney, **kwargs) -> MonarchMoney:
-    await mm.update_transaction(**kwargs)
-    return mm
+def response_json(response: Any) -> str:
+    return json.dumps(response, ensure_ascii=False, sort_keys=True, default=str)
+
+
+def require_successful_mutation(response: Any, payload_name: str) -> None:
+    if not isinstance(response, dict):
+        raise ValueError(f"{payload_name} returned an invalid response: {response!r}")
+
+    payload = response.get(payload_name)
+    if not isinstance(payload, dict):
+        raise ValueError(f"{payload_name} was missing from response: {response!r}")
+
+    errors = payload.get("errors")
+    if errors:
+        raise ValueError(f"{payload_name} returned errors: {response_json(errors)}")
+
+    if not isinstance(payload.get("transaction"), dict):
+        raise ValueError(f"{payload_name} returned no transaction: {response!r}")
+
+
+async def update_transaction_safe(mm: MonarchMoney, **kwargs) -> dict:
+    return await mm.update_transaction(**kwargs)
 
 
 async def set_reviewed_safe(
     mm: MonarchMoney, transaction_id: str, reviewed: bool
-) -> MonarchMoney:
-    await set_reviewed(mm, transaction_id, reviewed=reviewed)
-    return mm
+) -> dict:
+    return await set_reviewed(mm, transaction_id, reviewed=reviewed)
 
 
 async def set_transaction_tags_safe(
     mm: MonarchMoney, transaction_id: str, tag_ids: list[str]
-) -> MonarchMoney:
-    await mm.set_transaction_tags(transaction_id=transaction_id, tag_ids=tag_ids)
-    return mm
+) -> dict:
+    return await mm.set_transaction_tags(transaction_id=transaction_id, tag_ids=tag_ids)
 
 
 def build_update_payload(
@@ -541,6 +617,7 @@ async def main():
     args = parse_args()
     data_dir = args.data_dir
     input_file = resolve_input_file(args.input_file, data_dir)
+    log_file = resolve_log_file(args.log_file, data_dir)
     dry_run = bool(args.dry_run)
     update_local = bool(args.update_local)
     local_only = bool(args.local_only)
@@ -577,6 +654,9 @@ async def main():
             print("  Close any open CSVs and run the same command again.")
         return
 
+    audit_log = PushAuditLog(log_file)
+    print(f"Audit log: {log_file}")
+
     if not dry_run and update_local:
         print(f"Will update : {all_transactions_path}")
         print(f"             {unreviewed_path}")
@@ -590,62 +670,142 @@ async def main():
     failed = 0
     successfully_pushed_rows: list[dict] = []
 
-    for i, row in enumerate(rows, start=1):
-        try:
-            payload, reviewed, tag_ids = build_update_payload(
-                row,
-                category_map,
-                tag_map,
-                categories_file,
-                tags_file,
+    try:
+        for i, row in enumerate(rows, start=1):
+            transaction_id = clean_str(row.get("Transaction ID") or row.get("id")) or ""
+            record: dict[str, Any] = {
+                "row_number": i,
+                "transaction_id": transaction_id,
+                "merchant": clean_str(row.get("Merchant")) or "",
+                "update_transaction": "not_attempted",
+                "set_reviewed": "not_requested",
+                "set_tags": "not_requested",
+            }
+
+            try:
+                payload, reviewed, tag_ids = build_update_payload(
+                    row,
+                    category_map,
+                    tag_map,
+                    categories_file,
+                    tags_file,
+                )
+            except Exception as e:
+                skipped += 1
+                record.update(
+                    row_status="skipped",
+                    failed_operation="build_payload",
+                    error_type=type(e).__name__,
+                    error_message=str(e),
+                )
+                audit_log.write(record)
+                print(f"[{i}] Skipping row: {e}")
+                continue
+
+            record.update(
+                transaction_id=payload["transaction_id"],
+                requested_reviewed="" if reviewed is None else reviewed,
+                requested_tag_ids="" if tag_ids is None else json.dumps(tag_ids),
+                payload=json.dumps(payload, ensure_ascii=False, sort_keys=True),
+                set_reviewed="not_requested" if reviewed is None else "not_attempted",
+                set_tags="not_requested" if tag_ids is None else "not_attempted",
             )
-        except Exception as e:
-            skipped += 1
-            print(f"[{i}] Skipping row: {e}")
-            continue
 
-        print(f"[{i}] Transaction ID: {payload['transaction_id']}")
-        print(f"    Update payload: {payload}")
-        if reviewed is not None:
-            print(f"    Reviewed mutation: reviewed={reviewed}")
-        if tag_ids is not None:
-            print(f"    Tag IDs: {tag_ids}")
-
-        if dry_run:
-            updated += 1
-            continue
-
-        try:
-            assert mm is not None
-            mm = await update_transaction_safe(mm, **payload)
-
+            print(f"[{i}] Transaction ID: {payload['transaction_id']}")
+            print(f"    Update payload: {payload}")
             if reviewed is not None:
-                mm = await set_reviewed_safe(
-                    mm,
-                    transaction_id=payload["transaction_id"],
-                    reviewed=reviewed,
-                )
-
+                print(f"    Reviewed mutation: reviewed={reviewed}")
             if tag_ids is not None:
-                mm = await set_transaction_tags_safe(
-                    mm,
-                    transaction_id=payload["transaction_id"],
-                    tag_ids=tag_ids,
+                print(f"    Tag IDs: {tag_ids}")
+
+            if dry_run:
+                updated += 1
+                record.update(
+                    row_status="dry_run",
+                    update_transaction="planned",
+                    set_reviewed="not_requested" if reviewed is None else "planned",
+                    set_tags="not_requested" if tag_ids is None else "planned",
                 )
+                audit_log.write(record)
+                continue
 
-            print(f"[{i}] Updated transaction {payload['transaction_id']}")
-            updated += 1
-            successfully_pushed_rows.append(row)
+            assert mm is not None
+            failed_operation = ""
+            error: Exception | None = None
 
-        except TransportQueryError as e:
+            try:
+                response = await update_transaction_safe(mm, **payload)
+                record["update_transaction_response"] = response_json(response)
+                require_successful_mutation(response, "updateTransaction")
+                record["update_transaction"] = "succeeded"
+            except Exception as e:
+                record["update_transaction"] = "failed"
+                failed_operation = "update_transaction"
+                error = e
+
+            if error is None and reviewed is not None:
+                try:
+                    response = await set_reviewed_safe(
+                        mm,
+                        transaction_id=payload["transaction_id"],
+                        reviewed=reviewed,
+                    )
+                    record["set_reviewed_response"] = response_json(response)
+                    require_successful_mutation(response, "updateTransaction")
+                    record["set_reviewed"] = "succeeded"
+                except Exception as e:
+                    record["set_reviewed"] = "failed"
+                    failed_operation = "set_reviewed"
+                    error = e
+
+            if error is None and tag_ids is not None:
+                try:
+                    response = await set_transaction_tags_safe(
+                        mm,
+                        transaction_id=payload["transaction_id"],
+                        tag_ids=tag_ids,
+                    )
+                    record["set_tags_response"] = response_json(response)
+                    require_successful_mutation(response, "setTransactionTags")
+                    record["set_tags"] = "succeeded"
+                except Exception as e:
+                    record["set_tags"] = "failed"
+                    failed_operation = "set_tags"
+                    error = e
+
+            if error is None:
+                record["row_status"] = "succeeded"
+                audit_log.write(record)
+                print(f"[{i}] Updated transaction {payload['transaction_id']}")
+                updated += 1
+                successfully_pushed_rows.append(row)
+                continue
+
             failed += 1
-            print(f"[{i}] Update failed for {payload['transaction_id']}: {e}")
-        except Exception as e:
-            failed += 1
-            print(f"[{i}] Unexpected failure for {payload['transaction_id']}: {e}")
+            any_succeeded = any(
+                record[field] == "succeeded"
+                for field in ("update_transaction", "set_reviewed", "set_tags")
+            )
+            record.update(
+                row_status="partial_failure" if any_succeeded else "failed",
+                failed_operation=failed_operation,
+                error_type=type(error).__name__,
+                error_message=str(error),
+            )
+            audit_log.write(record)
+            failure_kind = (
+                "Update failed" if isinstance(error, TransportQueryError) else "Unexpected failure"
+            )
+            print(
+                f"[{i}] {failure_kind} for {payload['transaction_id']} "
+                f"during {failed_operation}: {error}"
+            )
+    finally:
+        audit_log.close()
 
     mode = "DRY RUN" if dry_run else "PUSHED"
     print(f"\nDone. {mode}: {updated}, Skipped: {skipped}, Failed: {failed}")
+    print(f"Audit log: {log_file}")
 
     if dry_run and updated > 0:
         print("Set --dry-run false and run again to push for real.")

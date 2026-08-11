@@ -415,6 +415,13 @@ Push and patch local CSV files after successful updates:
 python push.py --data-dir data --input-file push.csv --dry-run false --update-local true
 ```
 
+Every dry run and live push writes a timestamped per-row audit log under
+`data/push_logs/`. The log records the transaction update, reviewed-status
+mutation, and tag mutation separately, including partial successes and the exact
+failed operation, error, and Monarch response. Use `--log-file push_audit.csv`
+to choose a filename inside the data directory, or provide a path to write it
+elsewhere.
+
 If Monarch was updated but a local CSV was open in Excel and could not be
 patched, rerun local patching only:
 
