@@ -1,7 +1,7 @@
 import inspect
 from typing import Any
 
-from gql import Client, GraphQLRequest
+from gql import Client
 from monarchmoney import MonarchMoney, MonarchMoneyEndpoints
 
 MONARCH_API_BASE_URL = "https://api.monarch.com"
@@ -13,6 +13,8 @@ async def _gql_call_with_request(
     graphql_query: Any,
     variables: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
+    from gql import GraphQLRequest
+
     request = GraphQLRequest(
         graphql_query,
         variable_values=variables or {},
