@@ -18,7 +18,7 @@ from gql.transport.exceptions import TransportQueryError
 from monarchmoney import MonarchMoney
 
 from common.monarch_api import configure_monarch_api
-from common.auth import get_monarch_client
+from common.client import get_monarch_client
 from common.config import data_dir
 
 # ----------------------------
@@ -272,7 +272,7 @@ class PushAuditLog:
         self._file.close()
 
 
-# Authentication handled by `common.auth.get_monarch_client()`
+# Authentication handled by `common.client.get_monarch_client()`
 
 
 async def set_reviewed(mm: MonarchMoney, transaction_id: str, reviewed: bool = True):

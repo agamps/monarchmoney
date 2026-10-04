@@ -7,7 +7,7 @@ from pathlib import Path
 from gql.transport.exceptions import TransportServerError
 
 from common.monarch_api import configure_monarch_api
-from common.auth import get_monarch_client
+from common.client import get_monarch_client
 from monarchmoney import MonarchMoney
 
 from common.config import data_dir
@@ -34,7 +34,7 @@ def parse_args() -> argparse.Namespace:
     return parser.parse_args()
 
 
-# Authentication handled by `common.auth.get_monarch_client()`
+# Authentication handled by `common.client.get_monarch_client()`
 
 
 async def fetch_transactions_with_reauth(

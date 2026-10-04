@@ -47,7 +47,7 @@ from pathlib import Path
 
 import pandas as pd
 from gql import gql
-from common.auth import get_monarch_client
+from common.client import get_monarch_client
 
 from common.monarch_api import configure_monarch_api
 from common.config import data_dir
@@ -98,7 +98,7 @@ REVIEW_MUTATION = gql("""
 
 
 # ── Auth
-# Authentication handled by `common.auth.get_monarch_client()`
+# Authentication handled by `common.client.get_monarch_client()`
 
 
 # ── Helpers ─────────────────────────────────────────────────────────────────

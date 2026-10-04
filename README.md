@@ -31,7 +31,7 @@ case they end up in the repo. Double-check `git status` before committing.
 | `push/` | Build push files (`filter_*`, `copy_transaction_ids_to_push.py`) and send edits back (`push.py`; `legacy/` holds the old pusher). |
 | `reports/` | CSV and Excel reports built from the exported data. |
 | `tools/` | Miscellaneous helpers such as `grep_patterns_from_all.py`. |
-| `common/` | Shared code: config/paths, authentication, and the `gql` compatibility shim. |
+| `common/` | Shared code used by every script: `config.py` (data folder + session paths), `client.py` (returns a logged-in Monarch client, re-logging in when needed), `monarch_api.py` (`gql` compatibility shim). |
 
 Scripts are run directly, for example `python pull/pull_cats_tags.py`, from
 any working directory.

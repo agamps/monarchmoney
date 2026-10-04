@@ -7,7 +7,7 @@ import argparse
 from gql.transport.exceptions import TransportServerError
 
 from common.monarch_api import configure_monarch_api
-from common.auth import get_monarch_client
+from common.client import get_monarch_client
 from common.config import data_dir
 
 DEFAULT_DATA_DIR = data_dir()
