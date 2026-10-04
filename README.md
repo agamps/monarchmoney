@@ -260,7 +260,17 @@ is:
 python auth/login.py
 ```
 
-2. Export transactions and lookup data.
+2. Export transactions and lookup data. To start a fresh download, run:
+
+```bash
+python pull/pull_fresh.py
+```
+
+This moves the current data folder to the next free numbered folder (for
+example `~/monarch-data/data` becomes `~/monarch-data/data3`), copies its `*.txt`
+filter/term files into a new empty `data`, logs in, and runs every pull script
+below. `config.toml` doesn't change, so `data` always holds the latest pull. Add
+`--dry-run` to preview. To refresh in place instead, run the pulls directly:
 
 ```bash
 python pull/pull_transactions_persist_batches.py
@@ -284,6 +294,7 @@ common debug/run workflows. Once the venv and interpreter are set up, use the
 Run and Debug panel for the included profiles:
 
 - `Auth - Login`
+- `Pull - Fresh (archive data, pull everything)`
 - `Pull - Transactions and Unreviewed`
 - `Pull - Categories and Tags`
 - `Pull - Category Groups`
@@ -517,6 +528,7 @@ python reports/business_report.py --group-terms "Business, Travel" --exclude-gro
 | File | Features | Example |
 | --- | --- | --- |
 | `auth/login.py` | Creates and validates `~/monarch-data/.mm/mm_session.pickle`; re-runs interactive login when the saved session is missing, expired, or invalid. | `python auth/login.py` |
+| `pull/pull_fresh.py` | Archives the current data folder to the next free `dataN`, carries over `*.txt` filter files, logs in, and runs all pull scripts into a fresh folder. | `python pull/pull_fresh.py --dry-run` |
 | `pull/pull_transactions_persist_batches.py` | Pulls all transactions in batches; writes full JSON/CSV exports; writes unreviewed JSON/CSV exports; retries timeouts and refreshes auth on 401 responses. | `python pull/pull_transactions_persist_batches.py` |
 | `pull/pull_cats_tags.py` | Exports Monarch category and tag name-to-ID mappings as JSON and CSV; required before using friendly names in `push.py`. | `python pull/pull_cats_tags.py` |
 | `pull/pull_category_groups.py` | Exports category names, category IDs, group names, and group IDs; useful for group filters and reports. | `python pull/pull_category_groups.py` |

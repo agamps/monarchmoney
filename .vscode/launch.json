@@ -124,6 +124,14 @@
       "console": "integratedTerminal"
     },
     {
+      "name": "Pull - Fresh (archive data, pull everything)",
+      "type": "debugpy",
+      "request": "launch",
+      "program": "${workspaceFolder}/pull/pull_fresh.py",
+      "cwd": "${workspaceFolder}",
+      "console": "integratedTerminal"
+    },
+    {
       "name": "Pull - Categories and Tags",
       "type": "debugpy",
       "request": "launch",
