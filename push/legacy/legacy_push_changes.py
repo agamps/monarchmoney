@@ -11,16 +11,16 @@ whether an issue belongs to friendly-name mapping in push.py versus the raw
 Monarch update payload.
 
 Compared with push.py, this script intentionally does not resolve category or
-tag names from data/categories.json and data/tags.json. That makes it less
+tag names from <data dir>/categories.json and <data dir>/tags.json. That makes it less
 friendly for day-to-day review, but occasionally useful for narrow tests where
 the CSV already has raw Monarch IDs.
 
 Self-contained — no monarch_utils dependency. Session handling mirrors push.py.
 
 Usage:
-    python legacy_push_changes.py                              # dry run
-    python legacy_push_changes.py --dry-run false              # LIVE push
-    python legacy_push_changes.py --dry-run false --update-local true
+    python push/legacy/legacy_push_changes.py                              # dry run
+    python push/legacy/legacy_push_changes.py --dry-run false              # LIVE push
+    python push/legacy/legacy_push_changes.py --dry-run false --update-local true
 
 Arguments:
     --input             Source CSV path                       (default: push.csv)
@@ -47,13 +47,14 @@ from pathlib import Path
 
 import pandas as pd
 from gql import gql
-from monarch_auth import get_monarch_client
+from common.auth import get_monarch_client
 
-from monarch_api import configure_monarch_api
+from common.monarch_api import configure_monarch_api
+from common.config import data_dir
 
 # ── Config (mirrors push.py) ────────────────────────────────────────────────
 
-DEFAULT_DATA_DIR = Path(os.environ.get("MONARCH_DATA_DIR", "data"))
+DEFAULT_DATA_DIR = data_dir()
 DEFAULT_INPUT_FILE = Path(os.environ.get("MONARCH_PUSH_FILE", "push.csv"))
 DEFAULT_ALL_TRANSACTIONS_FILE = Path(
     os.environ.get("MONARCH_ALL_TRANSACTIONS_FILE", "all_transactions.csv")
@@ -97,7 +98,7 @@ REVIEW_MUTATION = gql("""
 
 
 # ── Auth
-# Authentication handled by `monarch_auth.get_monarch_client()`
+# Authentication handled by `common.auth.get_monarch_client()`
 
 
 # ── Helpers ─────────────────────────────────────────────────────────────────

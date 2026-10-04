@@ -2,19 +2,20 @@ import asyncio
 import argparse
 import csv
 import json
-import os
 from pathlib import Path
 
 from gql.transport.exceptions import TransportServerError
 
-from monarch_api import configure_monarch_api
-from monarch_auth import get_monarch_client
+from common.monarch_api import configure_monarch_api
+from common.auth import get_monarch_client
 from monarchmoney import MonarchMoney
+
+from common.config import data_dir
 
 # ----------------------------
 # Config
 # ----------------------------
-DEFAULT_DATA_DIR = Path(os.environ.get("MONARCH_DATA_DIR", "data"))
+DEFAULT_DATA_DIR = data_dir()
 BATCH_SIZE = 100  # configurable
 MAX_BATCH_RETRIES = 3
 RETRY_DELAY_SECONDS = 2
@@ -33,7 +34,7 @@ def parse_args() -> argparse.Namespace:
     return parser.parse_args()
 
 
-# Authentication handled by `monarch_auth.get_monarch_client()`
+# Authentication handled by `common.auth.get_monarch_client()`
 
 
 async def fetch_transactions_with_reauth(

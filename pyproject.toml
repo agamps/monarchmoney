@@ -1,0 +1,20 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "monarch-scripts"
+version = "0.1.0"
+description = "Command-line utilities for working with Monarch Money transaction data."
+requires-python = ">=3.11"
+dependencies = [
+    "monarchmoney==0.1.15",
+    "gql==4.0.0",
+    "pandas",
+    "openpyxl",
+]
+
+# Only `common` is a package; the folders auth/, pull/, push/, reports/, tools/
+# hold plain scripts run as `python pull/pull_cats_tags.py`.
+[tool.setuptools]
+packages = ["common"]

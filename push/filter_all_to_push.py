@@ -2,11 +2,11 @@
 Create push.csv from all transactions matching merchant/account/category/group filters.
 
 Default inputs:
-    data/all_transactions.csv
-    data/filter-all-merchants.txt or data/filter-unrev-merchants.txt
-    data/filter-all-accounts.txt or data/filter-unrev-accounts.txt
-    data/filter-all-categories.txt or data/filter-unrev-categories.txt
-    data/filter-all-groups.txt or data/filter-unrev-groups.txt
+    <data dir>/all_transactions.csv
+    <data dir>/filter-all-merchants.txt or <data dir>/filter-unrev-merchants.txt
+    <data dir>/filter-all-accounts.txt or <data dir>/filter-unrev-accounts.txt
+    <data dir>/filter-all-categories.txt or <data dir>/filter-unrev-categories.txt
+    <data dir>/filter-all-groups.txt or <data dir>/filter-unrev-groups.txt
 
 Each filter file is one search term per line. Blank lines and lines starting
 with # are ignored. Matching is case-insensitive substring matching by default.
@@ -16,26 +16,28 @@ import argparse
 import csv
 from pathlib import Path
 
+from common.config import data_dir, data_path
+
 CSV_ENCODINGS = ("utf-8-sig", "utf-8", "cp1252", "latin-1")
-DEFAULT_TRANSACTIONS = Path("data/all_transactions.csv")
-DEFAULT_OUTPUT = Path("data/push.csv")
+DEFAULT_TRANSACTIONS = data_path("all_transactions.csv")
+DEFAULT_OUTPUT = data_path("push.csv")
 DEFAULT_MERCHANT_FILTERS = (
-    Path("data/filter-all-merchants.txt"),
-    Path("data/filter-unrev-merchants.txt"),
+    data_path("filter-all-merchants.txt"),
+    data_path("filter-unrev-merchants.txt"),
 )
 DEFAULT_ACCOUNT_FILTERS = (
-    Path("data/filter-all-accounts.txt"),
-    Path("data/filter-unrev-accounts.txt"),
+    data_path("filter-all-accounts.txt"),
+    data_path("filter-unrev-accounts.txt"),
 )
 DEFAULT_CATEGORY_FILTERS = (
-    Path("data/filter-all-categories.txt"),
-    Path("data/filter-unrev-categories.txt"),
+    data_path("filter-all-categories.txt"),
+    data_path("filter-unrev-categories.txt"),
 )
 DEFAULT_GROUP_FILTERS = (
-    Path("data/filter-all-groups.txt"),
-    Path("data/filter-unrev-groups.txt"),
+    data_path("filter-all-groups.txt"),
+    data_path("filter-unrev-groups.txt"),
 )
-DEFAULT_GROUPS = Path("data/category_groups.csv")
+DEFAULT_GROUPS = data_path("category_groups.csv")
 GROUP_SORT_COLUMN = "__group__"
 
 
@@ -62,7 +64,7 @@ def parse_args() -> argparse.Namespace:
         "--output",
         type=Path,
         default=DEFAULT_OUTPUT,
-        help="Destination push CSV to create. Filenames like push3 become data/push3.csv.",
+        help="Destination push CSV to create. Filenames like push3 become <data dir>/push3.csv.",
     )
     parser.add_argument(
         "--write-mode",
@@ -75,8 +77,8 @@ def parse_args() -> argparse.Namespace:
         type=Path,
         default=None,
         help=(
-            "Merchant filter file. Defaults to data/filter-all-merchants.txt, "
-            "then data/filter-unrev-merchants.txt."
+            "Merchant filter file. Defaults to <data dir>/filter-all-merchants.txt, "
+            "then <data dir>/filter-unrev-merchants.txt."
         ),
     )
     parser.add_argument(
@@ -84,8 +86,8 @@ def parse_args() -> argparse.Namespace:
         type=Path,
         default=None,
         help=(
-            "Account filter file. Defaults to data/filter-all-accounts.txt, "
-            "then data/filter-unrev-accounts.txt."
+            "Account filter file. Defaults to <data dir>/filter-all-accounts.txt, "
+            "then <data dir>/filter-unrev-accounts.txt."
         ),
     )
     parser.add_argument(
@@ -93,8 +95,8 @@ def parse_args() -> argparse.Namespace:
         type=Path,
         default=None,
         help=(
-            "Category filter file. Defaults to data/filter-all-categories.txt, "
-            "then data/filter-unrev-categories.txt."
+            "Category filter file. Defaults to <data dir>/filter-all-categories.txt, "
+            "then <data dir>/filter-unrev-categories.txt."
         ),
     )
     parser.add_argument(
@@ -102,8 +104,8 @@ def parse_args() -> argparse.Namespace:
         type=Path,
         default=None,
         help=(
-            "Group filter file. Defaults to data/filter-all-groups.txt, "
-            "then data/filter-unrev-groups.txt."
+            "Group filter file. Defaults to <data dir>/filter-all-groups.txt, "
+            "then <data dir>/filter-unrev-groups.txt."
         ),
     )
     parser.add_argument(
@@ -158,7 +160,7 @@ def resolve_output_path(path: Path) -> Path:
 
     if len(path.parts) == 1:
         filename = path.name if path.suffix else f"{path.name}.csv"
-        return Path("data") / filename
+        return data_dir() / filename
 
     return path
 

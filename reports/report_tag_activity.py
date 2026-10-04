@@ -6,10 +6,12 @@ from openpyxl.styles import Font
 from openpyxl.styles import PatternFill
 from openpyxl.utils import get_column_letter
 
+from common.config import data_path
+
 
 CSV_ENCODINGS = ("utf-8-sig", "utf-8", "cp1252", "latin-1")
-DEFAULT_TRANSACTIONS = Path("data/all_transactions.csv")
-DEFAULT_OUTPUT = Path("data/tag_activity.xlsx")
+DEFAULT_TRANSACTIONS = data_path("all_transactions.csv")
+DEFAULT_OUTPUT = data_path("tag_activity.xlsx")
 
 HEADER_FILL = PatternFill(fill_type="solid", fgColor="1F4E78")
 HEADER_FONT = Font(name="Consolas", bold=True, color="FFFFFF")
@@ -37,7 +39,7 @@ def parse_args() -> argparse.Namespace:
         "--transactions",
         type=Path,
         default=DEFAULT_TRANSACTIONS,
-        help="Source transactions CSV. Defaults to data/all_transactions.csv.",
+        help="Source transactions CSV. Defaults to <data dir>/all_transactions.csv.",
     )
     parser.add_argument(
         "--output",

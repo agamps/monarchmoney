@@ -1,0 +1,9 @@
+# Copy to ~/monarch-data/config.toml (or point MONARCH_CONFIG at another file).
+
+# Folder every script reads from and writes to. Change this one line to switch,
+# e.g. "~/monarch-data/data1". MONARCH_DATA_DIR or a script's --data-dir flag
+# still override it for a single run.
+data_dir = "~/monarch-data/data"
+
+# Saved Monarch login session (optional; this is the default).
+# session_file = "~/monarch-data/.mm/mm_session.pickle"

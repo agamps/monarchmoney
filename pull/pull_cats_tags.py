@@ -1,16 +1,16 @@
 import asyncio
 import json
 import csv
-import os
 from pathlib import Path
 import argparse
 
 from gql.transport.exceptions import TransportServerError
 
-from monarch_api import configure_monarch_api
-from monarch_auth import get_monarch_client
+from common.monarch_api import configure_monarch_api
+from common.auth import get_monarch_client
+from common.config import data_dir
 
-DEFAULT_DATA_DIR = Path(os.environ.get("MONARCH_DATA_DIR", "data"))
+DEFAULT_DATA_DIR = data_dir()
 
 configure_monarch_api()
 

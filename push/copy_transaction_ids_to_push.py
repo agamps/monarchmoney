@@ -3,6 +3,8 @@ import csv
 import re
 from pathlib import Path
 
+from common.config import data_path
+
 
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(
@@ -21,13 +23,13 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument(
         "--transactions",
         type=Path,
-        default=Path("data/all_transactions.csv"),
+        default=data_path("all_transactions.csv"),
         help="Source transactions CSV.",
     )
     parser.add_argument(
         "--output",
         type=Path,
-        default=Path("data/push.csv"),
+        default=data_path("push.csv"),
         help="Destination CSV to write.",
     )
     return parser.parse_args()

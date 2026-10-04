@@ -9,13 +9,15 @@ from openpyxl.styles import Font
 from openpyxl.styles import PatternFill
 from openpyxl.utils import get_column_letter
 
+from common.config import data_path
+
 
 CSV_ENCODINGS = ("utf-8-sig", "utf-8", "cp1252", "latin-1")
-DEFAULT_TRANSACTIONS = Path("data/all_transactions.csv")
-DEFAULT_GROUPS = Path("data/category_groups.csv")
-DEFAULT_OPTIMIZABLE_GROUPS = Path("data/optimizable_groups.txt")
-DEFAULT_OPTIMIZABLE_CATEGORIES = Path("data/optimizable_categories.txt")
-DEFAULT_OUTPUT = Path("data/recurring_optimization.xlsx")
+DEFAULT_TRANSACTIONS = data_path("all_transactions.csv")
+DEFAULT_GROUPS = data_path("category_groups.csv")
+DEFAULT_OPTIMIZABLE_GROUPS = data_path("optimizable_groups.txt")
+DEFAULT_OPTIMIZABLE_CATEGORIES = data_path("optimizable_categories.txt")
+DEFAULT_OUTPUT = data_path("recurring_optimization.xlsx")
 
 HEADER_FILL = PatternFill(fill_type="solid", fgColor="1F4E78")
 HEADER_FONT = Font(name="Consolas", bold=True, color="FFFFFF")
@@ -128,13 +130,13 @@ def parse_args() -> argparse.Namespace:
         "--transactions",
         type=Path,
         default=DEFAULT_TRANSACTIONS,
-        help="Source transactions CSV. Defaults to data/all_transactions.csv.",
+        help="Source transactions CSV. Defaults to <data dir>/all_transactions.csv.",
     )
     parser.add_argument(
         "--groups",
         type=Path,
         default=DEFAULT_GROUPS,
-        help="Category groups CSV. Defaults to data/category_groups.csv.",
+        help="Category groups CSV. Defaults to <data dir>/category_groups.csv.",
     )
     parser.add_argument(
         "--optimizable-type",
@@ -152,7 +154,7 @@ def parse_args() -> argparse.Namespace:
         help=(
             "Flat text file with one category group name per line. Only expense "
             "transactions in these groups are analyzed. Blank lines and lines "
-            "starting with # are ignored. Defaults to data/optimizable_groups.txt."
+            "starting with # are ignored. Defaults to <data dir>/optimizable_groups.txt."
         ),
     )
     parser.add_argument(
@@ -163,7 +165,7 @@ def parse_args() -> argparse.Namespace:
             "Flat text file with one category search term per line. Used when "
             "--optimizable-type categories is selected. Terms are case-insensitive "
             "wildcard/substring matches against category names. Defaults to "
-            "data/optimizable_categories.txt."
+            "optimizable_categories.txt in the data dir."
         ),
     )
     parser.add_argument(

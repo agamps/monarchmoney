@@ -2,20 +2,20 @@ import asyncio
 import argparse
 import csv
 import json
-import os
 from pathlib import Path
 
 from gql import gql
 from gql.transport.exceptions import TransportServerError
 from monarchmoney import MonarchMoney
 
-from monarch_api import configure_monarch_api
-from monarch_auth import get_monarch_client
+from common.monarch_api import configure_monarch_api
+from common.auth import get_monarch_client
+from common.config import data_dir
 
 # ----------------------------
 # Config
 # ----------------------------
-DEFAULT_DATA_DIR = Path(os.environ.get("MONARCH_DATA_DIR", "data"))
+DEFAULT_DATA_DIR = data_dir()
 DEFAULT_OUTPUT_BASENAME = "unreviewed_transactions"
 BATCH_SIZE = 400  # configurable
 CSV_HEADERS = [

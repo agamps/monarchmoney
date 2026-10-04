@@ -7,8 +7,8 @@ Pulls all Monarch Money categories with their parent group info and writes:
         Category Name | Category ID | Group Name | Group ID
 
 Usage:
-    python pull_category_groups.py
-    python pull_category_groups.py --output my_groups.csv
+    python pull/pull_category_groups.py
+    python pull/pull_category_groups.py --output my_groups.csv
 """
 
 import asyncio
@@ -18,8 +18,9 @@ from pathlib import Path
 
 from gql.transport.exceptions import TransportServerError
 
-from monarch_api import configure_monarch_api
-from monarch_auth import get_monarch_client
+from common.monarch_api import configure_monarch_api
+from common.auth import get_monarch_client
+from common.config import data_path
 
 configure_monarch_api()
 
@@ -30,13 +31,13 @@ def parse_args() -> argparse.Namespace:
     )
     parser.add_argument(
         "--output",
-        default="category_groups.csv",
-        help="Output CSV file path (default: category_groups.csv)",
+        default=data_path("category_groups.csv"),
+        help="Output CSV file path (default: category_groups.csv in the data dir)",
     )
     return parser.parse_args()
 
 
-# Authentication handled by `monarch_auth.get_monarch_client()`
+# Authentication handled by `common.auth.get_monarch_client()`
 
 
 async def main() -> None:

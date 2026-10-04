@@ -7,10 +7,12 @@ from openpyxl.styles import Font
 from openpyxl.styles import PatternFill
 from openpyxl.utils import get_column_letter
 
+from common.config import data_dir, data_path
+
 
 CSV_ENCODINGS = ("utf-8-sig", "utf-8", "cp1252", "latin-1")
-DEFAULT_TRANSACTIONS = Path("data/all_transactions.csv")
-DEFAULT_GROUPS = Path("data/category_groups.csv")
+DEFAULT_TRANSACTIONS = data_path("all_transactions.csv")
+DEFAULT_GROUPS = data_path("category_groups.csv")
 
 HEADER_FILL = PatternFill(fill_type="solid", fgColor="1F4E78")
 HEADER_FONT = Font(name="Consolas", bold=True, color="FFFFFF")
@@ -59,7 +61,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument(
         "--output",
         type=Path,
-        help="Output Excel file path. Defaults to data/<group_terms>_business_report_<year>.xlsx.",
+        help="Output Excel file path. Defaults to <data dir>/<group_terms>_business_report_<year>.xlsx.",
     )
     return parser.parse_args()
 
@@ -136,7 +138,7 @@ def default_output_path(
     fiscal_year: int,
 ) -> Path:
     slug_parts = [*include_terms, *(f"exclude_{term}" for term in exclude_terms)]
-    return Path("data") / f"{slugify(slug_parts)}_business_report_{fiscal_year}.xlsx"
+    return data_dir() / f"{slugify(slug_parts)}_business_report_{fiscal_year}.xlsx"
 
 
 def read_csv(path: Path) -> pd.DataFrame:

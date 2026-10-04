@@ -2,6 +2,8 @@ import argparse
 import csv
 from pathlib import Path
 
+from common.config import data_path
+
 
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(
@@ -13,19 +15,19 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument(
         "--patterns",
         type=Path,
-        default=Path("data/patterns.txt"),
+        default=data_path("patterns.txt"),
         help="Text file containing one pattern per line.",
     )
     parser.add_argument(
         "--transactions",
         type=Path,
-        default=Path("data/all_transactions.csv"),
+        default=data_path("all_transactions.csv"),
         help="Source transactions CSV.",
     )
     parser.add_argument(
         "--output",
         type=Path,
-        default=Path("data/patterns_from_all.csv"),
+        default=data_path("patterns_from_all.csv"),
         help="Destination CSV for matching rows.",
     )
     parser.add_argument(

@@ -2,58 +2,10 @@
   "version": "0.2.0",
   "inputs": [
     {
-      "id": "unreviewedDataDir",
-      "type": "promptString",
-      "description": "Data directory for unreviewed transaction exports",
-      "default": "data"
-    },
-    {
       "id": "unreviewedFilename",
       "type": "promptString",
       "description": "Base filename for unreviewed transaction exports",
       "default": "unreviewed_transactions"
-    },
-    {
-      "id": "categoryGroupsOutput",
-      "type": "promptString",
-      "description": "Output CSV path for category group export",
-      "default": "data/category_groups.csv"
-    },
-    {
-      "id": "accountGroupsOutput",
-      "type": "promptString",
-      "description": "Output CSV path for account group export",
-      "default": "data/account_groups.csv"
-    },
-    {
-      "id": "groupNetReportOutput",
-      "type": "promptString",
-      "description": "Output CSV path for group net-by-year report",
-      "default": "data/group_net_by_year_report.csv"
-    },
-    {
-      "id": "yearlyPivotSource",
-      "type": "promptString",
-      "description": "Source CSV path for yearly amount pivots",
-      "default": "data/all_transactions.csv"
-    },
-    {
-      "id": "yearlyPivotOutput",
-      "type": "promptString",
-      "description": "Output Excel path for yearly amount pivots",
-      "default": "data/yearly_amount_pivots.xlsx"
-    },
-    {
-      "id": "tagReportSource",
-      "type": "promptString",
-      "description": "Source CSV path for tag activity report",
-      "default": "data/all_transactions.csv"
-    },
-    {
-      "id": "tagReportOutput",
-      "type": "promptString",
-      "description": "Output Excel path for tag activity report",
-      "default": "data/tag_activity.xlsx"
     },
     {
       "id": "tagReportLookbackYears",
@@ -80,18 +32,6 @@
       "default": ""
     },
     {
-      "id": "recurringOptimizationSource",
-      "type": "promptString",
-      "description": "Source CSV path for recurring optimization",
-      "default": "data/all_transactions.csv"
-    },
-    {
-      "id": "recurringOptimizationOutput",
-      "type": "promptString",
-      "description": "Output Excel path for recurring optimization",
-      "default": "data/recurring_optimization.xlsx"
-    },
-    {
       "id": "recurringOptimizationLookbackMonths",
       "type": "promptString",
       "description": "Months to inspect, capped at 36",
@@ -112,24 +52,6 @@
         "categories"
       ],
       "default": "groups"
-    },
-    {
-      "id": "unreviewedPivotOutput",
-      "type": "promptString",
-      "description": "Output Excel path for the unreviewed pivot report",
-      "default": "data/unreviewed_pivots.xlsx"
-    },
-    {
-      "id": "unreviewedPivotTransactions",
-      "type": "promptString",
-      "description": "Source CSV path for pending/unreviewed pivot report",
-      "default": "data/unreviewed_transactions.csv"
-    },
-    {
-      "id": "unreviewedPivotAccountGroups",
-      "type": "promptString",
-      "description": "Account metadata CSV path for pending/unreviewed pivot report",
-      "default": "data/account_groups.csv"
     },
     {
       "id": "copyTransactionIds",
@@ -154,8 +76,8 @@
     {
       "id": "filterOutput",
       "type": "promptString",
-      "description": "Output CSV path for filtered rows. Filenames like push3 become data/push3.csv",
-      "default": "data/push.csv"
+      "description": "Output CSV path for filtered rows. Bare filenames like push3 become <data dir>/push3.csv",
+      "default": "push.csv"
     },
     {
       "id": "filterWriteMode",
@@ -168,46 +90,10 @@
       "default": "overwrite"
     },
     {
-      "id": "filterUnreviewedSource",
-      "type": "promptString",
-      "description": "Source CSV path for unreviewed filtering",
-      "default": "data/unreviewed_transactions.csv"
-    },
-    {
-      "id": "filterUnreviewedMerchantFile",
-      "type": "promptString",
-      "description": "Merchant filter file for unreviewed filtering",
-      "default": "data/filter-unrev-merchants.txt"
-    },
-    {
-      "id": "filterUnreviewedAccountFile",
-      "type": "promptString",
-      "description": "Account filter file for unreviewed filtering",
-      "default": "data/filter-unrev-accounts.txt"
-    },
-    {
-      "id": "filterUnreviewedCategoryFile",
-      "type": "promptString",
-      "description": "Category filter file for unreviewed filtering",
-      "default": "data/filter-unrev-categories.txt"
-    },
-    {
-      "id": "filterUnreviewedGroupFile",
-      "type": "promptString",
-      "description": "Group filter file for unreviewed filtering",
-      "default": "data/filter-unrev-groups.txt"
-    },
-    {
-      "id": "filterCategoryGroupsFile",
-      "type": "promptString",
-      "description": "Category group CSV path for group filtering",
-      "default": "data/category_groups.csv"
-    },
-    {
       "id": "pushInputFile",
       "type": "promptString",
-      "description": "Push input CSV or JSON file",
-      "default": "data/push.csv"
+      "description": "Push input CSV or JSON file (bare filename = inside the configured data dir)",
+      "default": "push.csv"
     },
     {
       "id": "businessReportGroups",
@@ -233,7 +119,7 @@
       "name": "Auth - Login",
       "type": "debugpy",
       "request": "launch",
-      "program": "${workspaceFolder}/login.py",
+      "program": "${workspaceFolder}/auth/login.py",
       "cwd": "${workspaceFolder}",
       "console": "integratedTerminal"
     },
@@ -241,7 +127,7 @@
       "name": "Pull - Categories and Tags",
       "type": "debugpy",
       "request": "launch",
-      "program": "${workspaceFolder}/pull_cats_tags.py",
+      "program": "${workspaceFolder}/pull/pull_cats_tags.py",
       "cwd": "${workspaceFolder}",
       "console": "integratedTerminal"
     },
@@ -249,31 +135,23 @@
       "name": "Pull - Category Groups",
       "type": "debugpy",
       "request": "launch",
-      "program": "${workspaceFolder}/pull_category_groups.py",
+      "program": "${workspaceFolder}/pull/pull_category_groups.py",
       "cwd": "${workspaceFolder}",
-      "console": "integratedTerminal",
-      "args": [
-        "--output",
-        "${input:categoryGroupsOutput}"
-      ]
+      "console": "integratedTerminal"
     },
     {
       "name": "Pull - Account Groups",
       "type": "debugpy",
       "request": "launch",
-      "program": "${workspaceFolder}/pull_account_groups.py",
+      "program": "${workspaceFolder}/pull/pull_account_groups.py",
       "cwd": "${workspaceFolder}",
-      "console": "integratedTerminal",
-      "args": [
-        "--output",
-        "${input:accountGroupsOutput}"
-      ]
+      "console": "integratedTerminal"
     },
     {
       "name": "Pull - Transactions and Unreviewed",
       "type": "debugpy",
       "request": "launch",
-      "program": "${workspaceFolder}/pull_transactions_persist_batches.py",
+      "program": "${workspaceFolder}/pull/pull_transactions_persist_batches.py",
       "cwd": "${workspaceFolder}",
       "console": "integratedTerminal"
     },
@@ -281,12 +159,10 @@
       "name": "Pull - Unreviewed Only",
       "type": "debugpy",
       "request": "launch",
-      "program": "${workspaceFolder}/get_unreviewed.py",
+      "program": "${workspaceFolder}/pull/get_unreviewed.py",
       "cwd": "${workspaceFolder}",
       "console": "integratedTerminal",
       "args": [
-        "--data-dir",
-        "${input:unreviewedDataDir}",
         "--filename",
         "${input:unreviewedFilename}"
       ]
@@ -295,32 +171,20 @@
       "name": "Review - Unreviewed Pivot Report",
       "type": "debugpy",
       "request": "launch",
-      "program": "${workspaceFolder}/report_unreviewed_pivots.py",
+      "program": "${workspaceFolder}/reports/report_unreviewed_pivots.py",
       "cwd": "${workspaceFolder}",
-      "console": "integratedTerminal",
-      "args": [
-        "--transactions",
-        "${input:unreviewedPivotTransactions}",
-        "--account-groups",
-        "${input:unreviewedPivotAccountGroups}",
-        "--output",
-        "${input:unreviewedPivotOutput}"
-      ]
+      "console": "integratedTerminal"
     },
     {
       "name": "Review - Filter Unreviewed Merchants To Push",
       "type": "debugpy",
       "request": "launch",
-      "program": "${workspaceFolder}/filter_unreviewed_to_push.py",
+      "program": "${workspaceFolder}/push/filter_unreviewed_to_push.py",
       "cwd": "${workspaceFolder}",
       "console": "integratedTerminal",
       "args": [
         "--filter-type",
         "merchants",
-        "--unreviewed",
-        "${input:filterUnreviewedSource}",
-        "--merchant-filter",
-        "${input:filterUnreviewedMerchantFile}",
         "--output",
         "${input:filterOutput}",
         "--write-mode",
@@ -331,16 +195,12 @@
       "name": "Review - Filter Unreviewed Accounts To Push",
       "type": "debugpy",
       "request": "launch",
-      "program": "${workspaceFolder}/filter_unreviewed_to_push.py",
+      "program": "${workspaceFolder}/push/filter_unreviewed_to_push.py",
       "cwd": "${workspaceFolder}",
       "console": "integratedTerminal",
       "args": [
         "--filter-type",
         "accounts",
-        "--unreviewed",
-        "${input:filterUnreviewedSource}",
-        "--account-filter",
-        "${input:filterUnreviewedAccountFile}",
         "--output",
         "${input:filterOutput}",
         "--write-mode",
@@ -351,16 +211,12 @@
       "name": "Review - Filter Unreviewed Categories To Push",
       "type": "debugpy",
       "request": "launch",
-      "program": "${workspaceFolder}/filter_unreviewed_to_push.py",
+      "program": "${workspaceFolder}/push/filter_unreviewed_to_push.py",
       "cwd": "${workspaceFolder}",
       "console": "integratedTerminal",
       "args": [
         "--filter-type",
         "categories",
-        "--unreviewed",
-        "${input:filterUnreviewedSource}",
-        "--category-filter",
-        "${input:filterUnreviewedCategoryFile}",
         "--output",
         "${input:filterOutput}",
         "--write-mode",
@@ -371,18 +227,12 @@
       "name": "Review - Filter Unreviewed Groups To Push",
       "type": "debugpy",
       "request": "launch",
-      "program": "${workspaceFolder}/filter_unreviewed_to_push.py",
+      "program": "${workspaceFolder}/push/filter_unreviewed_to_push.py",
       "cwd": "${workspaceFolder}",
       "console": "integratedTerminal",
       "args": [
         "--filter-type",
         "groups",
-        "--unreviewed",
-        "${input:filterUnreviewedSource}",
-        "--group-filter",
-        "${input:filterUnreviewedGroupFile}",
-        "--groups",
-        "${input:filterCategoryGroupsFile}",
         "--output",
         "${input:filterOutput}",
         "--write-mode",
@@ -393,18 +243,12 @@
       "name": "Review - Filter Unreviewed Merchant/Account To Push",
       "type": "debugpy",
       "request": "launch",
-      "program": "${workspaceFolder}/filter_unreviewed_to_push.py",
+      "program": "${workspaceFolder}/push/filter_unreviewed_to_push.py",
       "cwd": "${workspaceFolder}",
       "console": "integratedTerminal",
       "args": [
         "--filter-type",
         "both",
-        "--unreviewed",
-        "${input:filterUnreviewedSource}",
-        "--merchant-filter",
-        "${input:filterUnreviewedMerchantFile}",
-        "--account-filter",
-        "${input:filterUnreviewedAccountFile}",
         "--output",
         "${input:filterOutput}",
         "--write-mode",
@@ -415,24 +259,12 @@
       "name": "Review - Filter Unreviewed All To Push",
       "type": "debugpy",
       "request": "launch",
-      "program": "${workspaceFolder}/filter_unreviewed_to_push.py",
+      "program": "${workspaceFolder}/push/filter_unreviewed_to_push.py",
       "cwd": "${workspaceFolder}",
       "console": "integratedTerminal",
       "args": [
         "--filter-type",
         "all",
-        "--unreviewed",
-        "${input:filterUnreviewedSource}",
-        "--merchant-filter",
-        "${input:filterUnreviewedMerchantFile}",
-        "--account-filter",
-        "${input:filterUnreviewedAccountFile}",
-        "--category-filter",
-        "${input:filterUnreviewedCategoryFile}",
-        "--group-filter",
-        "${input:filterUnreviewedGroupFile}",
-        "--groups",
-        "${input:filterCategoryGroupsFile}",
         "--output",
         "${input:filterOutput}",
         "--write-mode",
@@ -443,7 +275,7 @@
       "name": "Review - Filter All To Push",
       "type": "debugpy",
       "request": "launch",
-      "program": "${workspaceFolder}/filter_all_to_push.py",
+      "program": "${workspaceFolder}/push/filter_all_to_push.py",
       "cwd": "${workspaceFolder}",
       "console": "integratedTerminal",
       "args": [
@@ -459,7 +291,7 @@
       "name": "Review - Copy Transaction IDs To Push",
       "type": "debugpy",
       "request": "launch",
-      "program": "${workspaceFolder}/copy_transaction_ids_to_push.py",
+      "program": "${workspaceFolder}/push/copy_transaction_ids_to_push.py",
       "cwd": "${workspaceFolder}",
       "console": "integratedTerminal",
       "args": [
@@ -471,12 +303,10 @@
       "name": "Push - Dry Run",
       "type": "debugpy",
       "request": "launch",
-      "program": "${workspaceFolder}/push.py",
+      "program": "${workspaceFolder}/push/push.py",
       "cwd": "${workspaceFolder}",
       "console": "integratedTerminal",
       "args": [
-        "--data-dir",
-        "data",
         "--input-file",
         "${input:pushInputFile}",
         "--dry-run",
@@ -487,117 +317,89 @@
       "name": "Push - Live + Update Local",
       "type": "debugpy",
       "request": "launch",
-      "program": "${workspaceFolder}/push.py",
+      "program": "${workspaceFolder}/push/push.py",
       "cwd": "${workspaceFolder}",
       "console": "integratedTerminal",
       "args": [
-        "--data-dir",
-        "data",
         "--input-file",
         "${input:pushInputFile}",
         "--dry-run",
         "false",
         "--update-local",
-        "true",
-        "--all-transactions",
-        "data/all_transactions.csv",
-        "--unreviewed-file",
-        "data/unreviewed_transactions.csv"
+        "true"
       ]
     },
     {
       "name": "Push - Post-Failure Local Update",
       "type": "debugpy",
       "request": "launch",
-      "program": "${workspaceFolder}/push.py",
+      "program": "${workspaceFolder}/push/push.py",
       "cwd": "${workspaceFolder}",
       "console": "integratedTerminal",
       "args": [
-        "--data-dir",
-        "data",
         "--input-file",
         "${input:pushInputFile}",
         "--local-only",
-        "true",
-        "--all-transactions",
-        "data/all_transactions.csv",
-        "--unreviewed-file",
-        "data/unreviewed_transactions.csv"
+        "true"
       ]
     },
     {
       "name": "Reports - Group Net By Year CSV (Legacy)",
       "type": "debugpy",
       "request": "launch",
-      "program": "${workspaceFolder}/report_group_net_by_year.py",
+      "program": "${workspaceFolder}/reports/report_group_net_by_year.py",
       "cwd": "${workspaceFolder}",
-      "console": "integratedTerminal",
-      "args": [
-        "--output",
-        "${input:groupNetReportOutput}"
-      ]
+      "console": "integratedTerminal"
     },
     {
       "name": "Reports - Yearly Amount Pivots",
       "type": "debugpy",
       "request": "launch",
-      "program": "${workspaceFolder}/report_yearly_amount_pivots.py",
+      "program": "${workspaceFolder}/reports/report_yearly_amount_pivots.py",
       "cwd": "${workspaceFolder}",
       "console": "integratedTerminal",
       "args": [
-        "--transactions",
-        "${input:yearlyPivotSource}",
         "--years",
         "${input:yearlyPivotYears}",
         "--exclude-groups",
         "${input:yearlyPivotExcludeGroups}",
         "--exclude-categories",
-        "${input:yearlyPivotExcludeCategories}",
-        "--output",
-        "${input:yearlyPivotOutput}"
+        "${input:yearlyPivotExcludeCategories}"
       ]
     },
     {
       "name": "Reports - Tag Activity",
       "type": "debugpy",
       "request": "launch",
-      "program": "${workspaceFolder}/report_tag_activity.py",
+      "program": "${workspaceFolder}/reports/report_tag_activity.py",
       "cwd": "${workspaceFolder}",
       "console": "integratedTerminal",
       "args": [
-        "--transactions",
-        "${input:tagReportSource}",
         "--lookback-years",
-        "${input:tagReportLookbackYears}",
-        "--output",
-        "${input:tagReportOutput}"
+        "${input:tagReportLookbackYears}"
       ]
     },
     {
       "name": "Reports - Recurring Optimization",
       "type": "debugpy",
       "request": "launch",
-      "program": "${workspaceFolder}/report_recurring_optimization.py",
+      "program": "${workspaceFolder}/reports/report_recurring_optimization.py",
       "cwd": "${workspaceFolder}",
       "console": "integratedTerminal",
       "args": [
-        "--transactions",
-        "${input:recurringOptimizationSource}",
         "--lookback-months",
         "${input:recurringOptimizationLookbackMonths}",
         "--recent-months",
         "${input:recurringOptimizationRecentMonths}",
         "--optimizable-type",
-        "${input:recurringOptimizationOptimizableType}",
-        "--output",
-        "${input:recurringOptimizationOutput}"
+        "${input:recurringOptimizationOptimizableType}"
       ]
     },
     {
       "name": "Reports - Business",
       "type": "debugpy",
       "request": "launch",
-      "program": "${workspaceFolder}/business_report.py",
+      "program": "${workspaceFolder}/reports/business_report.py",
       "cwd": "${workspaceFolder}",
       "console": "integratedTerminal",
       "args": [

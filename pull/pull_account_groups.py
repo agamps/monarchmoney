@@ -3,25 +3,25 @@ pull_account_groups.py
 ----------------------
 Pulls Monarch Money accounts with their account type/group metadata and writes:
 
-    data/account_groups.csv
+    <data dir>/account_groups.csv
         Account | Account ID | Account Group | Account Type | Account Subtype | ...
 
 Usage:
-    python pull_account_groups.py
-    python pull_account_groups.py --output data/account_groups.csv
+    python pull/pull_account_groups.py
+    python pull/pull_account_groups.py --output ~/somewhere/account_groups.csv
 """
 
 import argparse
 import asyncio
 import csv
-import os
 from pathlib import Path
 from typing import Any
 
-from monarch_api import configure_monarch_api
-from monarch_auth import get_monarch_client
+from common.monarch_api import configure_monarch_api
+from common.auth import get_monarch_client
+from common.config import data_dir
 
-DEFAULT_DATA_DIR = Path(os.environ.get("MONARCH_DATA_DIR", "data"))
+DEFAULT_DATA_DIR = data_dir()
 DEFAULT_OUTPUT = DEFAULT_DATA_DIR / "account_groups.csv"
 
 configure_monarch_api()
@@ -65,7 +65,7 @@ def parse_args() -> argparse.Namespace:
     return parser.parse_args()
 
 
-# Authentication handled by `monarch_auth.get_monarch_client()`
+# Authentication handled by `common.auth.get_monarch_client()`
 
 
 def label_from_key(value: object) -> str:

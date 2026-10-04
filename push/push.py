@@ -17,13 +17,14 @@ from gql.transport.exceptions import TransportServerError
 from gql.transport.exceptions import TransportQueryError
 from monarchmoney import MonarchMoney
 
-from monarch_api import configure_monarch_api
-from monarch_auth import get_monarch_client
+from common.monarch_api import configure_monarch_api
+from common.auth import get_monarch_client
+from common.config import data_dir
 
 # ----------------------------
 # Config
 # ----------------------------
-DEFAULT_DATA_DIR = Path(os.environ.get("MONARCH_DATA_DIR", "data"))
+DEFAULT_DATA_DIR = data_dir()
 DEFAULT_INPUT_FILE = Path(os.environ.get("MONARCH_PUSH_FILE", "push.csv"))
 DEFAULT_DRY_RUN = os.environ.get("MONARCH_DRY_RUN", "true").strip().lower() in {
     "true",
@@ -271,7 +272,7 @@ class PushAuditLog:
         self._file.close()
 
 
-# Authentication handled by `monarch_auth.get_monarch_client()`
+# Authentication handled by `common.auth.get_monarch_client()`
 
 
 async def set_reviewed(mm: MonarchMoney, transaction_id: str, reviewed: bool = True):

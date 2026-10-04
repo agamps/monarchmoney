@@ -1,12 +1,17 @@
-import asyncio
-from pathlib import Path
+"""Shared Monarch authentication helpers.
 
+`get_monarch_client()` returns an authenticated `MonarchMoney` client,
+loading the saved session, validating it, and falling back to an
+interactive login when it is missing or expired.
+
+Session file: see `common.config.session_file()`
+(default ~/monarch-data/.mm/mm_session.pickle).
+"""
 from gql.transport.exceptions import TransportServerError
 from monarchmoney import MonarchMoney
 
-from monarch_api import configure_monarch_api
-
-SESSION_FILE = Path(".mm/mm_session.pickle")
+from common.config import session_file
+from common.monarch_api import configure_monarch_api
 
 configure_monarch_api()
 
@@ -44,25 +49,31 @@ async def interactive_login_with_retry(max_attempts: int = 2) -> MonarchMoney:
     raise last_error
 
 
-async def main():
-    mm = MonarchMoney()
+async def login(verbose: bool = False) -> MonarchMoney:
+    """Load a valid saved session, or log in interactively and save one."""
+    path = session_file()
 
-    if SESSION_FILE.exists():
-        print(f"Found saved session: {SESSION_FILE}")
-        mm.load_session(str(SESSION_FILE))
+    if path.exists():
+        if verbose:
+            print(f"Found saved session: {path}")
+        mm = MonarchMoney()
+        mm.load_session(str(path))
 
         if await session_is_valid(mm):
-            print("Saved session is still valid.")
-            return
+            if verbose:
+                print("Saved session is still valid.")
+            return mm
 
         print("Saved session is invalid or expired. Refreshing login...")
-        SESSION_FILE.unlink(missing_ok=True)
+        path.unlink(missing_ok=True)
 
     mm = await interactive_login_with_retry()
-    SESSION_FILE.parent.mkdir(parents=True, exist_ok=True)
-    mm.save_session(str(SESSION_FILE))
-    print("Fresh session saved.")
+    path.parent.mkdir(parents=True, exist_ok=True)
+    mm.save_session(str(path))
+    print(f"Fresh session saved to {path}.")
+    return mm
 
 
-if __name__ == "__main__":
-    asyncio.run(main())
+async def get_monarch_client() -> MonarchMoney:
+    """Return an authenticated MonarchMoney client."""
+    return await login()

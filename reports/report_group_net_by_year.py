@@ -4,6 +4,8 @@ from collections import defaultdict
 from datetime import datetime
 from pathlib import Path
 
+from common.config import data_path
+
 
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(
@@ -12,19 +14,19 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument(
         "--transactions",
         type=Path,
-        default=Path("data/all_transactions.csv"),
+        default=data_path("all_transactions.csv"),
         help="Path to the all transactions CSV.",
     )
     parser.add_argument(
         "--groups",
         type=Path,
-        default=Path("data/category_groups.csv"),
+        default=data_path("category_groups.csv"),
         help="Path to the category groups CSV.",
     )
     parser.add_argument(
         "--output",
         type=Path,
-        default=Path("data/group_net_by_year_report.csv"),
+        default=data_path("group_net_by_year_report.csv"),
         help="Path for the generated report CSV.",
     )
     parser.add_argument(
