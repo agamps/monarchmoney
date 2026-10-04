@@ -1,0 +1,6 @@
+{
+  // Debug runs already use .venv/bin/python. Auto-activation types
+  // `source .venv/bin/activate` into new terminals, which races with
+  // interactive prompts such as the Monarch login Email: prompt.
+  "python.terminal.activateEnvironment": false
+}
