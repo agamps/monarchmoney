@@ -3,6 +3,10 @@
 		{
 			"name": "monarchmoney",
 			"path": "."
+		},
+		{
+			"name": "monarch-categorize",
+			"path": "../monarch-categorize"
 		}
 	],
 	"settings": {
