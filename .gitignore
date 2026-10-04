@@ -215,4 +215,4 @@ data/
 data*/
 filter-unrev-*
 tmp*/
-config.toml
+config.local.toml

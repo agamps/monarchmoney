@@ -1,0 +1,17 @@
+# Default settings for the Monarch scripts. This file is checked in to git.
+#
+# To change a setting on your machine, don't edit this file. Instead create
+# config.local.toml next to it (git ignores that file) and set only the keys
+# you want to change, for example:
+#
+#     data_dir = "~/monarch-data/data1"
+#
+# Keys in config.local.toml override the same keys here. For a single run,
+# MONARCH_DATA_DIR or a script's --data-dir / --output flag override both.
+
+# Folder every script reads from and writes to. pull/pull_fresh.py archives
+# this folder to the next free numbered sibling (data -> data3) before pulling.
+data_dir = "~/monarch-data/data"
+
+# Saved Monarch login session.
+session_file = "~/monarch-data/.mm/mm_session.pickle"

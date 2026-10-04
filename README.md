@@ -19,8 +19,8 @@ the repo under `~/monarch-data/` (see [Config & Data Location](#config--data-loc
 - `~/monarch-data/data/`, `data1/`, `data2/`, etc. - exported transactions,
   category IDs, tags, reports, and push files
 
-The included `.gitignore` still excludes `.mm/`, `data*/` and `config.toml` in
-case they end up in the repo. Double-check `git status` before committing.
+The included `.gitignore` still excludes `.mm/`, `data*/` and
+`config.local.toml` in case they end up in the repo. Double-check `git status` before committing.
 
 ## Repository Layout
 
@@ -38,25 +38,21 @@ any working directory.
 
 ## Config & Data Location
 
-Scripts read and write one data folder, chosen in `~/monarch-data/config.toml`:
+Paths come from two files in the repo root:
+
+- `config.default.toml` - checked in. Sets `data_dir = "~/monarch-data/data"`
+  and `session_file = "~/monarch-data/.mm/mm_session.pickle"`.
+- `config.local.toml` - optional and ignored by git. Any key you put here
+  overrides the default on your machine, for example:
 
 ```toml
-data_dir = "~/monarch-data/data"    # change to ~/monarch-data/data1 to switch
+data_dir = "~/monarch-data/data1"
 ```
 
-Create it from the sample:
-
-```bash
-mkdir -p ~/monarch-data
-cp config.example.toml ~/monarch-data/config.toml
-```
-
-Without a config file, scripts use `~/monarch-data/data`. In this README,
-`<data dir>` means whichever folder is configured. For a single run you can
-override it with `MONARCH_DATA_DIR=...` or a script's `--data-dir` / `--output`
-flags; `MONARCH_CONFIG` points at a different config file. The login session is
-stored at `~/monarch-data/.mm/mm_session.pickle` (override with `session_file`
-in the config).
+Leave `config.default.toml` unchanged and put personal changes in
+`config.local.toml`. In this README, `<data dir>` means whichever folder is
+configured. For a single run you can also override it with
+`MONARCH_DATA_DIR=...` or a script's `--data-dir` / `--output` flags.
 
 ## Requirements
 
@@ -237,8 +233,8 @@ python auth/login.py
 This prompts for your Monarch email, password, and MFA code if needed. It saves
 the session at `~/monarch-data/.mm/mm_session.pickle`, outside the repo.
 
-12. Optionally create `~/monarch-data/config.toml` to choose a data folder other
-than `~/monarch-data/data` (see [Config & Data Location](#config--data-location)).
+12. Optionally create `config.local.toml` in the repo root to choose a data
+folder other than `~/monarch-data/data` (see [Config & Data Location](#config--data-location)).
 
 13. Run a small export to make sure everything works.
 
@@ -269,7 +265,7 @@ python pull/pull_fresh.py
 This moves the current data folder to the next free numbered folder (for
 example `~/monarch-data/data` becomes `~/monarch-data/data3`), copies its `*.txt`
 filter/term files into a new empty `data`, logs in, and runs every pull script
-below. `config.toml` doesn't change, so `data` always holds the latest pull. Add
+below. The config doesn't change, so `data` always holds the latest pull. Add
 `--dry-run` to preview. To refresh in place instead, run the pulls directly:
 
 ```bash
