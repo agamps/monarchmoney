@@ -34,7 +34,9 @@ async def interactive_login_with_retry(max_attempts: int = 2) -> MonarchMoney:
     last_error: Exception | None = None
 
     for attempt in range(1, max_attempts + 1):
-        mm = MonarchMoney()
+        # Pass the session path explicitly: the library otherwise loads/saves
+        # .mm/mm_session.pickle relative to the current directory.
+        mm = MonarchMoney(session_file=str(session_file()))
         try:
             await mm.interactive_login()
             return mm
@@ -56,7 +58,7 @@ async def login(verbose: bool = False) -> MonarchMoney:
     if path.exists():
         if verbose:
             print(f"Found saved session: {path}")
-        mm = MonarchMoney()
+        mm = MonarchMoney(session_file=str(path))
         mm.load_session(str(path))
 
         if await session_is_valid(mm):
