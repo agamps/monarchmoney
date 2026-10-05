@@ -50,5 +50,9 @@ def data_path(name: str) -> Path:
     return data_dir() / name
 
 
+def push_dir() -> Path:
+    return _setting("push_dir")
+
+
 def session_file() -> Path:
     return _setting("session_file")

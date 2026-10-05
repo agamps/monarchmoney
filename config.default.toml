@@ -13,5 +13,10 @@
 # this folder to the next free numbered sibling (data -> data3) before pulling.
 data_dir = "~/monarch-data/data"
 
+# Folder of push-ready CSVs (monarch-categorize writes its push files here).
+# push/push.py looks here first when --input-file is a bare file name, then in
+# data_dir.
+push_dir = "~/monarch-data/push"
+
 # Saved Monarch login session.
 session_file = "~/monarch-data/.mm/mm_session.pickle"

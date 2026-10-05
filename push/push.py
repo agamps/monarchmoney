@@ -19,7 +19,7 @@ from monarchmoney import MonarchMoney
 
 from common.monarch_api import configure_monarch_api
 from common.client import get_monarch_client
-from common.config import data_dir
+from common.config import data_dir, push_dir
 
 # ----------------------------
 # Config
@@ -68,7 +68,11 @@ def parse_args() -> argparse.Namespace:
         "--input-file",
         type=Path,
         default=DEFAULT_INPUT_FILE,
-        help="CSV or JSON file containing transaction updates to push.",
+        help=(
+            "CSV or JSON file containing transaction updates to push. A bare file "
+            "name (.csv optional) is looked up in the configured push folder, then "
+            "in --data-dir; a path with folders is used as given."
+        ),
     )
     parser.add_argument(
         "--dry-run",
@@ -230,15 +234,21 @@ def load_rows(path: Path) -> list[dict]:
 
 
 def resolve_input_file(input_file: Path, data_dir: Path) -> Path:
-    if input_file.is_absolute():
+    """A path with folders (or ~) is used as given. A bare file name is looked
+    up in the push folder, then the data folder, adding .csv if it has no
+    extension."""
+    input_file = input_file.expanduser()
+    if input_file.is_absolute() or len(input_file.parts) > 1:
         return input_file
 
-    if len(input_file.parts) == 1:
-        data_dir_candidate = data_dir / input_file
-        if data_dir_candidate.exists():
-            return data_dir_candidate
+    name = input_file if input_file.suffix else input_file.with_suffix(".csv")
+    folders = [push_dir(), data_dir]
+    for folder in folders:
+        if (folder / name).exists():
+            return folder / name
 
-    return input_file
+    looked_in = ", ".join(str(folder) for folder in folders)
+    raise FileNotFoundError(f"Input file {name} not found in {looked_in}")
 
 
 def resolve_log_file(log_file: Path | None, data_dir: Path) -> Path:
@@ -498,6 +508,25 @@ def local_recovery_command(
     return subprocess.list2cmdline(command)
 
 
+def local_value(col: str, value: Any) -> str:
+    """Write a pushed value in the format the pull scripts use, whatever format
+    the push file has (spreadsheets turn 2026-01-31 into 1/31/26, -1234.5 into
+    "-1,234.50" and False into FALSE)."""
+    if value is None:
+        return ""
+    if col == "Date":
+        return normalize_date(value) or ""
+    if col == "Amount":
+        amount = parse_amount(value)
+        return "" if amount is None else str(amount)
+    if col in ("Hide From Reports", "Needs Review"):
+        flag = normalize_bool(value)
+        return "" if flag is None else str(flag)
+    if col == "Tags":
+        return ",".join(split_tag_names(value))
+    return str(value)
+
+
 def update_local_files(
     pushed_rows: list[dict],
     _category_map: dict[str, str],
@@ -522,7 +551,7 @@ def update_local_files(
                 continue
             for col in UPDATABLE_COLS:
                 if col in pushed and col in df.columns:
-                    df.at[idx, col] = pushed[col] if pushed[col] is not None else ""
+                    df.at[idx, col] = local_value(col, pushed[col])
         return df
 
     all_df_for_unreviewed = None

@@ -40,7 +40,8 @@ any working directory.
 
 Paths come from two files in the repo root:
 
-- `config.default.toml` - checked in. Sets `data_dir = "~/monarch-data/data"`
+- `config.default.toml` - checked in. Sets `data_dir = "~/monarch-data/data"`,
+  `push_dir = "~/monarch-data/push"` (where monarch-categorize writes push files)
   and `session_file = "~/monarch-data/.mm/mm_session.pickle"`.
 - `config.local.toml` - optional and ignored by git. Any key you put here
   overrides the default on your machine, for example:
@@ -536,7 +537,7 @@ python reports/business_report.py --group-terms "Business, Travel" --exclude-gro
 | `push/filter_all_to_push.py` | Same style as the unreviewed filter, but scans `all_transactions.csv`; useful for historical cleanup or bulk edits beyond unreviewed rows. | `python push/filter_all_to_push.py --filter-type categories --exact` |
 | `push/copy_transaction_ids_to_push.py` | Copies selected rows from `all_transactions.csv` into a push file by transaction ID; accepts positional IDs or a delimited text string. | `python push/copy_transaction_ids_to_push.py --transaction-ids "txn_1, txn_2"` |
 | `tools/grep_patterns_from_all.py` | Searches every CSV field in `all_transactions.csv` for patterns from a text file; writes matching rows plus a `Matched Patterns` column. | `python tools/grep_patterns_from_all.py` |
-| `push/push.py` | Main pusher; reads CSV or JSON update rows; maps category/tag names to Monarch IDs; updates merchant, category, amount, date, notes, hide-from-reports, review status, and tags; supports dry-run, live push, local CSV patching, and local-only recovery. | `python push/push.py --input-file push.csv --dry-run true` |
+| `push/push.py` | Main pusher; reads CSV or JSON update rows (a bare `--input-file` name is looked up in `<push dir>`, then `<data dir>`); maps category/tag names to Monarch IDs; updates merchant, category, amount, date, notes, hide-from-reports, review status, and tags; supports dry-run, live push, local CSV patching, and local-only recovery. | `python push/push.py --input-file push.csv --dry-run true` |
 | `push/legacy/legacy_push_changes.py` | Legacy pusher for older CSVs that already contain raw Monarch fields such as `category_id`, `merchant_name`, and `needs_review`; kept as a fallback/debugging path. | `python push/legacy/legacy_push_changes.py --input ~/monarch-data/data/legacy_push.csv --dry-run true` |
 | `reports/report_group_net_by_year.py` | Generates a CSV report of net income/expense totals by category group for each year. | `python reports/report_group_net_by_year.py --include-unmapped` |
 | `reports/report_unreviewed_pivots.py` | Generates an Excel workbook with summaries and pivot-style views for pending/unreviewed transactions by merchant, account, category, and account subtype. | `python reports/report_unreviewed_pivots.py` |

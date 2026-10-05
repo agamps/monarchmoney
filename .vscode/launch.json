@@ -92,8 +92,8 @@
     {
       "id": "pushInputFile",
       "type": "promptString",
-      "description": "Push input CSV or JSON file (bare filename = inside the configured data dir)",
-      "default": "push.csv"
+      "description": "Push file name: looked up in the configured push folder, then the data folder (a full path also works)",
+      "default": "push_confident.csv"
     },
     {
       "id": "businessReportGroups",
