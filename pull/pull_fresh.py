@@ -34,6 +34,7 @@ def pull_commands(target: Path) -> list[list[str]]:
         [str(SCRIPT_DIR / "pull_cats_tags.py"), "--data-dir", str(target)],
         [str(SCRIPT_DIR / "pull_category_groups.py"), "--output", str(target / "category_groups.csv")],
         [str(SCRIPT_DIR / "pull_account_groups.py"), "--output", str(target / "account_groups.csv")],
+        [str(SCRIPT_DIR / "pull_rules.py"), "--data-dir", str(target)],
     ]
 
 

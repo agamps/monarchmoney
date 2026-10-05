@@ -272,6 +272,7 @@ below. The config doesn't change, so `data` always holds the latest pull. Add
 python pull/pull_transactions_persist_batches.py
 python pull/pull_cats_tags.py
 python pull/pull_category_groups.py
+python pull/pull_rules.py
 python pull/pull_account_groups.py
 ```
 
@@ -527,6 +528,7 @@ python reports/business_report.py --group-terms "Business, Travel" --exclude-gro
 | `pull/pull_fresh.py` | Archives the current data folder to the next free `dataN`, carries over `*.txt` filter files, logs in, and runs all pull scripts into a fresh folder. | `python pull/pull_fresh.py --dry-run` |
 | `pull/pull_transactions_persist_batches.py` | Pulls all transactions in batches; writes full JSON/CSV exports; writes unreviewed JSON/CSV exports; retries timeouts and refreshes auth on 401 responses. | `python pull/pull_transactions_persist_batches.py` |
 | `pull/pull_cats_tags.py` | Exports Monarch category and tag name-to-ID mappings as JSON and CSV; required before using friendly names in `push.py`. | `python pull/pull_cats_tags.py` |
+| `pull/pull_rules.py` | Exports the transaction rules from Monarch's Settings -> Rules (criteria, amounts, accounts, category/merchant/tag actions) as JSON and a readable CSV; used by monarch-categorize. | `python pull/pull_rules.py` |
 | `pull/pull_category_groups.py` | Exports category names, category IDs, group names, and group IDs; useful for group filters and reports. | `python pull/pull_category_groups.py` |
 | `pull/pull_account_groups.py` | Exports account names, account IDs, account type/subtype, account group, balances, and visibility flags; useful for cash, loan, investment, and net-worth grouping. | `python pull/pull_account_groups.py` |
 | `pull/get_unreviewed.py` | Pulls only transactions that need review; writes unreviewed JSON/CSV; upserts fetched rows into `all_transactions.csv`. | `python pull/get_unreviewed.py --filename unreviewed_transactions` |
@@ -557,6 +559,7 @@ python reports/business_report.py --group-terms "Business, Travel" --exclude-gro
 | `<data dir>/unreviewed_transactions.csv` | `pull_transactions_persist_batches.py` or `get_unreviewed.py` | Transactions currently marked as needing review. |
 | `<data dir>/categories.json` | `pull_cats_tags.py` | Category name-to-ID map used by `push.py`. |
 | `<data dir>/tags.json` | `pull_cats_tags.py` | Tag name-to-ID map used by `push.py`. |
+| `<data dir>/rules.json`, `rules.csv` | `pull_rules.py` | Monarch transaction rules in rule order. |
 | `<data dir>/category_groups.csv` | `pull_category_groups.py` | Category-to-group map used by group filters and reports. |
 | `<data dir>/account_groups.csv` | `pull_account_groups.py` | Account-to-type/group map for cash, loan, investment, and net-worth grouping. |
 | `<data dir>/push.csv` | filter/copy scripts or manual editing | Rows to dry-run or push back to Monarch. |

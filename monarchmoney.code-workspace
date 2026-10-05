@@ -7,6 +7,9 @@
 		{
 			"name": "monarch-categorize",
 			"path": "../monarch-categorize"
+		},
+		{
+			"path": "../../../monarch-data"
 		}
 	],
 	"settings": {

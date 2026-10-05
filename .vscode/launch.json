@@ -140,6 +140,14 @@
       "console": "integratedTerminal"
     },
     {
+      "name": "Pull - Transaction Rules",
+      "type": "debugpy",
+      "request": "launch",
+      "program": "${workspaceFolder}/pull/pull_rules.py",
+      "cwd": "${workspaceFolder}",
+      "console": "integratedTerminal"
+    },
+    {
       "name": "Pull - Category Groups",
       "type": "debugpy",
       "request": "launch",
