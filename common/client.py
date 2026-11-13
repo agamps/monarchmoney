@@ -9,7 +9,7 @@ Session file: see `common.config.session_file()`
 """
 import getpass
 
-from aiohttp import ClientSession
+from aiohttp import ClientError, ClientSession
 from gql.transport.exceptions import TransportServerError
 from monarchmoney import LoginFailedException, MonarchMoney, MonarchMoneyEndpoints, RequireMFAException
 
@@ -30,9 +30,6 @@ async def session_is_valid(mm: MonarchMoney) -> bool:
         if "401" in str(e):
             return False
         raise
-    except TimeoutError:
-        print("Timed out validating saved session.")
-        return False
 
 
 def login_error_message(error: BaseException) -> str:
@@ -125,7 +122,12 @@ async def login(verbose: bool = False) -> MonarchMoney:
         mm = MonarchMoney(session_file=str(path))
         mm.load_session(str(path))
 
-        if await session_is_valid(mm):
+        try:
+            valid = await session_is_valid(mm)
+        except (TimeoutError, ClientError):
+            # Only a 401 means the session is gone; a network problem says nothing about it.
+            raise SystemExit("Couldn't reach Monarch; your saved session was kept. Try again.") from None
+        if valid:
             if verbose:
                 print("Saved session is still valid.")
             return mm
