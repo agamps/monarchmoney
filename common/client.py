@@ -108,7 +108,11 @@ async def login(verbose: bool = False) -> MonarchMoney:
         print("Saved session is invalid or expired. Refreshing login...")
         path.unlink(missing_ok=True)
 
-    mm = await interactive_login_with_retry()
+    try:
+        mm = await interactive_login_with_retry()
+    except EOFError:
+        # No terminal to type into (e.g. input piped or closed).
+        raise SystemExit("Login needed: run auth/login.py in a terminal, then try again.") from None
     path.parent.mkdir(parents=True, exist_ok=True)
     mm.save_session(str(path))
     print(f"Fresh session saved to {path}.")
