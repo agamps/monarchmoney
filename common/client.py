@@ -9,8 +9,9 @@ Session file: see `common.config.session_file()`
 """
 import getpass
 
+from aiohttp import ClientSession
 from gql.transport.exceptions import TransportServerError
-from monarchmoney import LoginFailedException, MonarchMoney, RequireMFAException
+from monarchmoney import LoginFailedException, MonarchMoney, MonarchMoneyEndpoints, RequireMFAException
 
 from common.config import session_file
 from common.monarch_api import configure_monarch_api
@@ -46,12 +47,36 @@ def login_error_message(error: BaseException) -> str:
     return str(error).splitlines()[0]
 
 
+async def request_token(mm: MonarchMoney, email: str, password: str, code: str | None = None) -> None:
+    """The library's login request, but as a trusted device.
+
+    The library always sends trusted_device=False, and Monarch then expires the
+    session about 30 minutes after login.
+    """
+    data = {"username": email, "password": password, "supports_mfa": True, "trusted_device": True}
+    if code:
+        data["totp"] = code
+    async with ClientSession(headers=mm._headers) as session:
+        async with session.post(MonarchMoneyEndpoints.getLoginEndpoint(), json=data) as resp:
+            if resp.status == 403 and not code:
+                raise RequireMFAException("Multi-Factor Auth Required")
+            try:
+                body = await resp.json()
+            except Exception:
+                body = {}
+            if resp.status != 200:
+                reason = body.get("detail") or body.get("error_code") or f"HTTP {resp.status}: {resp.reason}"
+                raise LoginFailedException(reason)
+    mm.set_token(body["token"])
+    mm._headers["Authorization"] = f"Token {body['token']}"
+
+
 async def prompt_login(mm: MonarchMoney) -> None:
-    """Like the library's interactive_login, but a mistyped MFA code can be re-entered."""
+    """Like the library's interactive_login, but trusted, and a mistyped MFA code can be re-entered."""
     email = input("Email: ")
     password = getpass.getpass("Password: ")
     try:
-        await mm.login(email, password, use_saved_session=False, save_session=False)
+        await request_token(mm, email, password)
         return
     except RequireMFAException:
         pass
@@ -59,7 +84,7 @@ async def prompt_login(mm: MonarchMoney) -> None:
     for attempt in range(1, MFA_CODE_ATTEMPTS + 1):
         code = input("Two Factor Code: ").strip()
         try:
-            await mm.multi_factor_authenticate(email, password, code)
+            await request_token(mm, email, password, code)
             return
         except (LoginFailedException, RequireMFAException) as e:
             if attempt == MFA_CODE_ATTEMPTS:
