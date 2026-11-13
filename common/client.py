@@ -7,13 +7,17 @@ interactive login when it is missing or expired.
 Session file: see `common.config.session_file()`
 (default ~/monarch-data/.mm/mm_session.pickle).
 """
+import getpass
+
 from gql.transport.exceptions import TransportServerError
-from monarchmoney import MonarchMoney
+from monarchmoney import LoginFailedException, MonarchMoney, RequireMFAException
 
 from common.config import session_file
 from common.monarch_api import configure_monarch_api
 
 configure_monarch_api()
+
+MFA_CODE_ATTEMPTS = 3
 
 
 async def session_is_valid(mm: MonarchMoney) -> bool:
@@ -30,6 +34,39 @@ async def session_is_valid(mm: MonarchMoney) -> bool:
         return False
 
 
+def login_error_message(error: BaseException) -> str:
+    """Monarch's reason for a failed login, without the library's raw HTTP dump."""
+    # The library re-raises Monarch's reason (e.g. "Your code was invalid...") as a
+    # LoginFailedException holding the raw response; the reason is earlier in the chain.
+    current: BaseException | None = error
+    while current is not None:
+        if isinstance(current, RequireMFAException) and str(current) != "Multi-Factor Auth Required":
+            return str(current)
+        current = current.__context__
+    return str(error).splitlines()[0]
+
+
+async def prompt_login(mm: MonarchMoney) -> None:
+    """Like the library's interactive_login, but a mistyped MFA code can be re-entered."""
+    email = input("Email: ")
+    password = getpass.getpass("Password: ")
+    try:
+        await mm.login(email, password, use_saved_session=False, save_session=False)
+        return
+    except RequireMFAException:
+        pass
+
+    for attempt in range(1, MFA_CODE_ATTEMPTS + 1):
+        code = input("Two Factor Code: ").strip()
+        try:
+            await mm.multi_factor_authenticate(email, password, code)
+            return
+        except (LoginFailedException, RequireMFAException) as e:
+            if attempt == MFA_CODE_ATTEMPTS:
+                raise
+            print(login_error_message(e))
+
+
 async def interactive_login_with_retry(max_attempts: int = 2) -> MonarchMoney:
     last_error: Exception | None = None
 
@@ -38,11 +75,13 @@ async def interactive_login_with_retry(max_attempts: int = 2) -> MonarchMoney:
         # .mm/mm_session.pickle relative to the current directory.
         mm = MonarchMoney(session_file=str(session_file()))
         try:
-            await mm.interactive_login()
+            await prompt_login(mm)
             return mm
         except Exception as e:
             last_error = e
             if "401" not in str(e) or attempt == max_attempts:
+                if isinstance(e, (LoginFailedException, RequireMFAException)):
+                    raise SystemExit(f"Login failed: {login_error_message(e)}") from None
                 raise
 
             print("Interactive login returned 401. Retrying with a fresh client...")
