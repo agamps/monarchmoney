@@ -527,6 +527,17 @@ def local_value(col: str, value: Any) -> str:
     return str(value)
 
 
+def sent_to_monarch(col: str, value: Any) -> bool:
+    """Whether build_payload sends this column for this value. A blank Notes,
+    Hide From Reports or Needs Review isn't sent, so Monarch keeps its value and
+    the local copy must too."""
+    if col == "Notes":
+        return clean_str(value) is not None
+    if col in ("Hide From Reports", "Needs Review"):
+        return normalize_bool(value) is not None
+    return True
+
+
 def update_local_files(
     pushed_rows: list[dict],
     _category_map: dict[str, str],
@@ -550,7 +561,7 @@ def update_local_files(
             if pushed is None:
                 continue
             for col in UPDATABLE_COLS:
-                if col in pushed and col in df.columns:
+                if col in pushed and col in df.columns and sent_to_monarch(col, pushed[col]):
                     df.at[idx, col] = local_value(col, pushed[col])
         return df
 
